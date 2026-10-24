@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-2 -2 410 106" width="410" height="106" fill="none" stroke-width="18" stroke-linejoin="round">
+  <title>MOGA</title>
+  <path d="M9 100 V9 L42 60 L75 9 V100" stroke="#ffffff"/>
+  <rect x="111" y="9" width="60" height="82" rx="14" stroke="#ffffff"/>
+  <path d="M133 27 H149" stroke="#ffffff" stroke-width="7" stroke-linecap="round"/>
+  <path d="M277 21 A41 41 0 1 0 289 50 H254" stroke="#ffffff"/>
+  <path d="M325 100 L361 9 L397 100 M340 66 H382" stroke="#ffffff"/>
+</svg>

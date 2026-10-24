@@ -1,0 +1,10 @@
+{
+  "name": "moga-erp",
+  "private": true,
+  "packageManager": "pnpm@12.6.0",
+  "scripts": {
+    "dev": "pnpm --filter erp dev",
+    "build": "pnpm --filter erp build",
+    "lint": "pnpm --filter erp lint"
+  }
+}
