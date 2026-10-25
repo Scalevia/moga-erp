@@ -32,13 +32,13 @@ import type { Employee, Shift } from "@/lib/types";
 const nav = [
   { href: "/pos", label: "بيع", icon: ShoppingCart },
   { href: "/pos/stock", label: "المخزون", icon: Boxes },
-  { href: "/pos/customers", label: "العملاء", icon: Users },
   { href: "/pos/accounts", label: "الحسابات", icon: Scale },
+  { href: "/pos/services", label: "فودافون كاش وفوري", icon: Wallet },
+  { href: "/pos/purchases", label: "استلام بضاعة", icon: PackagePlus },
+  { href: "/pos/customers", label: "العملاء", icon: Users },
   { href: "/pos/returns", label: "مرتجع", icon: RotateCcw },
   { href: "/pos/installments", label: "تحصيل أقساط", icon: CalendarClock },
-  { href: "/pos/services", label: "فودافون كاش وفوري", icon: Wallet },
   { href: "/pos/used-phone", label: "شراء مستعمل", icon: Smartphone },
-  { href: "/pos/purchases", label: "استلام بضاعة", icon: PackagePlus },
   { href: "/pos/finance", label: "مصروفات وحركات", icon: HandCoins },
   { href: "/pos/shift", label: "تقفيل الشيفت", icon: ClipboardCheck },
 ];
