@@ -17,7 +17,7 @@ import {
 import { useState } from "react";
 import { Button, Card, Field, Input, Money, PageHeader, Segmented, Select, cn } from "@/components/ui";
 import { dateTime, ledgerLabel, sinceDays } from "@/lib/format";
-import { currentShift, lentOverdueDays, lentRemaining, useStore } from "@/lib/store";
+import { currentShift, lentOverdueDays, lentRemaining, useStore, loanRemaining } from "@/lib/store";
 import type { LedgerKind } from "@/lib/types";
 
 type Kind = Extract<
@@ -76,7 +76,7 @@ export default function FinancePage() {
   const shift = currentShift(store);
   const recent = store.movements.filter((m) => m.shiftId === shift?.id).slice(-6).reverse();
   const suppliers = store.contacts.filter((c) => c.kind === "supplier");
-  const openLoans = store.loans.filter((l) => l.repaid < l.amount);
+  const openLoans = store.loans.filter((l) => loanRemaining(l) > 0);
   const openLent = store.lentOut.filter((l) => lentRemaining(l) > 0);
   const lentTarget = openLent.find((l) => l.id === target);
   const overLimit = kind === "lent_out" && !isAdmin && Number(amount) > store.settings.employeeLendLimit;
@@ -90,13 +90,10 @@ export default function FinancePage() {
       store.lendMoney({ name: borrower.name.trim(), phone: borrower.phone.trim(), amount: a, dueDate, from: via, notes: note || undefined });
       setBorrower({ name: "", phone: "" });
     } else if (kind === "lent_repaid") store.collectLent(target, a, via);
+    else if (kind === "supplier_payment") store.paySupplier({ supplierId: target, amount: a, via: "cash", note: note || undefined });
     else {
       let description = note || ledgerLabel[kind];
       if (kind === "employee_advance") description = `سلفة ${employees.find((e) => e.id === target)?.name ?? ""}`;
-      if (kind === "supplier_payment") {
-        description = `دفعة لـ ${suppliers.find((s) => s.id === target)?.name ?? ""}`;
-        useStore.setState((s) => ({ supplierPayables: { ...s.supplierPayables, [target]: (s.supplierPayables[target] ?? 0) - a } }));
-      }
       if (kind === "expense") description = `${target || "مصروف"}${note ? ` — ${note}` : ""}`;
       store.recordMovement({ kind, cash: tile.direction * a, wallet: 0, topup: 0, commission: 0, description, targetEmployeeId: kind === "employee_advance" ? target : undefined, category: kind === "expense" ? target : undefined });
     }
@@ -181,7 +178,7 @@ export default function FinancePage() {
                     <option value="">اختار…</option>
                     {openLoans.map((l) => (
                       <option key={l.id} value={l.id}>
-                        {store.contacts.find((c) => c.id === l.lenderId)?.name} — متبقي {(l.amount - l.repaid).toLocaleString("en")}
+                        {store.contacts.find((c) => c.id === l.lenderId)?.name} — متبقي {loanRemaining(l).toLocaleString("en")}
                       </option>
                     ))}
                   </Select>

@@ -14,6 +14,7 @@ import {
   repBalance,
   repUnpaidSince,
   useStore,
+  loanRemaining,
 } from "@/lib/store";
 
 /** One person or party in the "who owes whom" summary; `href` jumps to its details below. */
@@ -69,7 +70,7 @@ export default function MoneyPage() {
   const weOwe: Party[] = [];
   for (const [id, v] of Object.entries(supplierPayables)) if (v > 0) weOwe.push({ key: `sup-${id}`, name: name(id), kind: "مورد", amount: v, href: "#sec-suppliers" });
   const byLender = new Map<string, number>();
-  for (const l of loans) if (l.amount - l.repaid > 0) byLender.set(l.lenderId, (byLender.get(l.lenderId) ?? 0) + l.amount - l.repaid);
+  for (const l of loans) if (loanRemaining(l) > 0) byLender.set(l.lenderId, (byLender.get(l.lenderId) ?? 0) + loanRemaining(l));
   for (const [id, v] of byLender) weOwe.push({ key: `loan-${id}`, name: name(id), kind: "سلفة خارجية", amount: v, href: "#sec-loans" });
   for (const id of machineIds) {
     const b = repBalance(store, id);
@@ -207,12 +208,12 @@ export default function MoneyPage() {
                   </div>
                 </div>
                 <div className="text-end">
-                  <Money value={l.amount - l.repaid} className="font-semibold" />
+                  <Money value={loanRemaining(l)} className="font-semibold" />
                   <div className="text-xs text-ink-3">من <Money value={l.amount} /></div>
                 </div>
               </div>
               <div className="mt-2 h-1.5 rounded-full bg-surface-2">
-                <div className="h-1.5 rounded-full bg-good" style={{ width: `${(l.repaid / l.amount) * 100}%` }} />
+                <div className="h-1.5 rounded-full bg-good" style={{ width: `${((l.amount - loanRemaining(l)) / l.amount) * 100}%` }} />
               </div>
             </li>
           ))}

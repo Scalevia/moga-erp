@@ -44,6 +44,7 @@ const dateFmt = new Intl.DateTimeFormat("ar-EG-u-nu-latn", {
   year: "numeric",
   timeZone: "Africa/Cairo",
 });
+const dayMonthFmt = new Intl.DateTimeFormat("ar-EG-u-nu-latn", { day: "numeric", month: "short", timeZone: "Africa/Cairo" });
 const timeFmt = new Intl.DateTimeFormat("ar-EG-u-nu-latn", {
   hour: "numeric",
   minute: "2-digit",
@@ -52,6 +53,11 @@ const timeFmt = new Intl.DateTimeFormat("ar-EG-u-nu-latn", {
 
 export function date(iso: string): string {
   return dateFmt.format(new Date(iso));
+}
+
+/** "20 أكتوبر" — for near dates where the year is obvious. */
+export function dayMonth(iso: string): string {
+  return dayMonthFmt.format(new Date(iso));
 }
 
 export function time(iso: string): string {

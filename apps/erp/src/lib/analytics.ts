@@ -1,7 +1,7 @@
 // Aggregations for the owner dashboard. These become SQL views/RPCs later.
 
 import { orderProfit, orderTotal } from "./store";
-import type { CashMovement, ItemCategory, Order, PayrollEntry, PhoneUnit, Product, Shift } from "./types";
+import type { CashMovement, ItemCategory, LentOut, Order, PayrollEntry, PhoneUnit, Product, Shift } from "./types";
 
 // Service commissions and machine bonuses are profit with no revenue line of their own.
 const serviceProfit = (m: CashMovement) => m.commission;
@@ -290,7 +290,7 @@ export interface Expenses {
  * asset purchases, loan repayments and owner drawings.
  */
 export function monthExpenses(
-  s: { movements: CashMovement[]; payroll: PayrollEntry[]; shifts: Shift[] },
+  s: { movements: CashMovement[]; payroll: PayrollEntry[]; shifts: Shift[]; lentOut?: LentOut[] },
   month: string,
   uptoDay = 31,
 ): Expenses {
@@ -301,6 +301,9 @@ export function monthExpenses(
     const category = m.category || m.description.split(" — ")[0] || "أخرى";
     byCat.set(category, (byCat.get(category) ?? 0) - (m.cash + m.wallet + (m.bank ?? 0)));
   }
+  // Money the shop lent and then forgave is a loss (a lender forgiving the shop isn't counted as profit).
+  const forgiven = (s.lentOut ?? []).flatMap((l) => l.history ?? []).filter((e) => e.type === "forgiven" && inRange(e.at)).reduce((a, e) => a + e.amount, 0);
+  if (forgiven) byCat.set("مسامحة سُلف", (byCat.get("مسامحة سُلف") ?? 0) + forgiven);
   const operating = [...byCat].map(([category, amount]) => ({ category, amount })).sort((a, b) => b.amount - a.amount);
   const operatingTotal = operating.reduce((a, x) => a + x.amount, 0);
   const salaries = s.payroll.filter((p) => p.month === month).reduce((a, p) => a + p.salary, 0);

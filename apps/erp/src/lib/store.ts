@@ -32,6 +32,7 @@ import type {
   Contact,
   InstallmentPlan,
   LedgerKind,
+  DebtEvent,
   LentOut,
   Loan,
   BalanceId,
@@ -143,12 +144,18 @@ interface State {
   updateSettings: (patch: Partial<ShopSettings>) => void;
   paySalary: (input: { employeeId: string; month: string; via: "cash" | "wallet" | "bank" }) => PayrollEntry;
   addSupplier: (input: { name: string; phone: string }) => string;
+  /** Pay a supplier part of what the shop owes them. */
+  paySupplier: (input: { supplierId: string; amount: number; via: "cash" | "wallet" | "bank"; note?: string }) => void;
   addProduct: (input: NewProductInput) => string;
   payInstallment: (planId: string, amount: number, method: Payment["method"]) => void;
   addLoan: (lenderName: string, lenderPhone: string, amount: number, notes?: string) => void;
   repayLoan: (loanId: string, amount: number) => void;
   lendMoney: (input: { name: string; phone: string; amount: number; dueDate: string; from: "cash" | "wallet"; notes?: string }) => void;
   collectLent: (id: string, amount: number, to: "cash" | "wallet") => void;
+  /** Settle what someone owes the shop (oldest loan first): a repayment, or the owner forgiving it. */
+  settleLent: (input: { borrowerId: string; amount: number; type: DebtEvent["type"]; via?: "cash" | "wallet"; note?: string }) => void;
+  /** Settle what the shop owes a lender (oldest first): the shop repays, or the lender forgives it. */
+  settleLoan: (input: { lenderId: string; amount: number; type: DebtEvent["type"]; via?: "cash" | "wallet"; note?: string }) => void;
   openShift: (input: { float: number; count: BalanceCount; expected: NonNullable<Shift["openingExpected"]> }) => void;
   closeShift: (input: { counted: number; count: BalanceCount }) => Shift;
   setBonusPercent: (id: BalanceId, percent: number) => void;
@@ -341,9 +348,25 @@ export const useStore = create<State>()(
               bank: via === "bank" ? -paid : 0,
               topup: 0,
               commission: 0,
+              contactId: supplierId,
               description: `دفعة لـ ${supplier?.name ?? ""} — فاتورة استلام #${invoice.number}`,
             });
           return invoice;
+        },
+
+        paySupplier: ({ supplierId, amount, via, note }) => {
+          const supplier = get().contacts.find((c) => c.id === supplierId);
+          set((st) => ({ supplierPayables: { ...st.supplierPayables, [supplierId]: (st.supplierPayables[supplierId] ?? 0) - amount } }));
+          movement({
+            kind: "supplier_payment",
+            cash: via === "cash" ? -amount : 0,
+            wallet: via === "wallet" ? -amount : 0,
+            bank: via === "bank" ? -amount : 0,
+            topup: 0,
+            commission: 0,
+            contactId: supplierId,
+            description: `دفعة لـ ${supplier?.name ?? ""}${note ? ` — ${note}` : ""}`,
+          });
         },
 
         addEmployee: (input) => {
@@ -431,14 +454,15 @@ export const useStore = create<State>()(
 
         addLoan: (lenderName, lenderPhone, amount, notes) => {
           const lenderId = upsertContact("lender", { name: lenderName, phone: lenderPhone });
-          set((st) => ({ loans: [...st.loans, { id: uid("loan"), lenderId, amount, repaid: 0, receivedAt: nowIso(), notes }] }));
+          set((st) => ({ loans: [...st.loans, { id: uid("loan"), lenderId, amount, repaid: 0, receivedAt: nowIso(), receivedBy: st.currentEmployeeId ?? undefined, notes }] }));
           movement({ kind: "loan_received", cash: amount, wallet: 0, topup: 0, commission: 0, description: `سلفة من ${lenderName}` });
         },
 
         repayLoan: (loanId, amount) => {
           const loan = get().loans.find((l) => l.id === loanId);
           const lender = get().contacts.find((c) => c.id === loan?.lenderId);
-          set((st) => ({ loans: st.loans.map((l) => (l.id === loanId ? { ...l, repaid: l.repaid + amount } : l)) }));
+          const event: DebtEvent = { at: nowIso(), type: "repaid", amount, by: get().currentEmployeeId ?? "unknown", via: "cash" };
+          set((st) => ({ loans: st.loans.map((l) => (l.id === loanId ? { ...l, repaid: l.repaid + amount, history: [...(l.history ?? []), event] } : l)) }));
           movement({ kind: "loan_repayment", cash: -amount, wallet: 0, topup: 0, commission: 0, description: `سداد لـ ${lender?.name}` });
         },
 
@@ -460,7 +484,8 @@ export const useStore = create<State>()(
         collectLent: (id, amount, to) => {
           const loan = get().lentOut.find((l) => l.id === id);
           const borrower = get().contacts.find((c) => c.id === loan?.borrowerId);
-          set((st) => ({ lentOut: st.lentOut.map((l) => (l.id === id ? { ...l, repaid: l.repaid + amount } : l)) }));
+          const event: DebtEvent = { at: nowIso(), type: "repaid", amount, by: get().currentEmployeeId ?? "unknown", via: to };
+          set((st) => ({ lentOut: st.lentOut.map((l) => (l.id === id ? { ...l, repaid: l.repaid + amount, history: [...(l.history ?? []), event] } : l)) }));
           movement({
             kind: "lent_repaid",
             cash: to === "cash" ? amount : 0,
@@ -469,6 +494,55 @@ export const useStore = create<State>()(
             commission: 0,
             description: `${borrower?.name ?? ""} رجّع ${amount.toLocaleString("en")}`,
           });
+        },
+
+        settleLent: ({ borrowerId, amount, type, via = "cash", note }) => {
+          const by = get().currentEmployeeId ?? "unknown";
+          const at = nowIso();
+          let left = amount;
+          set((st) => ({
+            lentOut: st.lentOut
+              .slice()
+              .sort((a, b) => a.givenAt.localeCompare(b.givenAt))
+              .map((l) => {
+                if (l.borrowerId !== borrowerId || left <= 0 || lentRemaining(l) <= 0) return l;
+                const take = Math.min(left, lentRemaining(l));
+                left -= take;
+                const event: DebtEvent = { at, type, amount: take, by, via: type === "repaid" ? via : undefined, note };
+                return type === "repaid"
+                  ? { ...l, repaid: l.repaid + take, history: [...(l.history ?? []), event] }
+                  : { ...l, forgiven: (l.forgiven ?? 0) + take, history: [...(l.history ?? []), event] };
+              }),
+          }));
+          // A repayment brings money in; forgiving moves no cash (it's counted as a loss in the owner's net profit).
+          if (type === "repaid") {
+            const name = get().contacts.find((c) => c.id === borrowerId)?.name ?? "";
+            movement({ kind: "lent_repaid", cash: via === "cash" ? amount : 0, wallet: via === "wallet" ? amount : 0, topup: 0, commission: 0, description: `${name} رجّع ${amount.toLocaleString("en")}` });
+          }
+        },
+
+        settleLoan: ({ lenderId, amount, type, via = "cash", note }) => {
+          const by = get().currentEmployeeId ?? "unknown";
+          const at = nowIso();
+          let left = amount;
+          set((st) => ({
+            loans: st.loans
+              .slice()
+              .sort((a, b) => a.receivedAt.localeCompare(b.receivedAt))
+              .map((l) => {
+                if (l.lenderId !== lenderId || left <= 0 || loanRemaining(l) <= 0) return l;
+                const take = Math.min(left, loanRemaining(l));
+                left -= take;
+                const event: DebtEvent = { at, type, amount: take, by, via: type === "repaid" ? via : undefined, note };
+                return type === "repaid"
+                  ? { ...l, repaid: l.repaid + take, history: [...(l.history ?? []), event] }
+                  : { ...l, forgiven: (l.forgiven ?? 0) + take, history: [...(l.history ?? []), event] };
+              }),
+          }));
+          if (type === "repaid") {
+            const name = get().contacts.find((c) => c.id === lenderId)?.name ?? "";
+            movement({ kind: "loan_repayment", cash: via === "cash" ? -amount : 0, wallet: via === "wallet" ? -amount : 0, topup: 0, commission: 0, description: `سداد لـ ${name}` });
+          }
         },
 
         openShift: ({ float, count, expected }) => {
@@ -515,7 +589,7 @@ export const useStore = create<State>()(
       };
     },
     {
-      name: "moga-demo-v14",
+      name: "moga-demo-v16",
       storage: idbStorage,
     },
   ),
@@ -616,7 +690,11 @@ export function lastClosedShift(s: Pick<State, "shifts">) {
 
 
 export function lentRemaining(l: LentOut) {
-  return l.amount - l.repaid;
+  return l.amount - l.repaid - (l.forgiven ?? 0);
+}
+
+export function loanRemaining(l: Loan) {
+  return l.amount - l.repaid - (l.forgiven ?? 0);
 }
 
 /** Whole days past the agreed return date (0 if not due yet). */

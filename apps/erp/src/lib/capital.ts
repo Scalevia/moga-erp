@@ -3,7 +3,7 @@
 
 import { inventoryValue } from "./analytics";
 import { balanceIds, balanceLabel, machineIds, machineLabel } from "./format";
-import { bankBalance, currentShift, lentRemaining, expectedCash, lastClosedShift, machineBalance, outstandingAdvances, planRemaining, repBalance, useStore, walletBalance } from "./store";
+import { bankBalance, currentShift, lentRemaining, loanRemaining, expectedCash, lastClosedShift, machineBalance, outstandingAdvances, planRemaining, repBalance, useStore, walletBalance } from "./store";
 import type { ProductCategory } from "./types";
 
 type StoreState = ReturnType<typeof useStore.getState>;
@@ -115,7 +115,7 @@ export function capital(s: StoreState) {
   const totalAssets = assets.reduce((a, g) => a + g.total, 0);
 
   const suppliers = Object.values(s.supplierPayables).reduce((a, v) => a + v, 0);
-  const loans = s.loans.reduce((a, l) => a + l.amount - l.repaid, 0);
+  const loans = s.loans.reduce((a, l) => a + loanRemaining(l), 0);
   const liabilities: CapitalLine[] = [
     { label: "حسابات الموردين", value: suppliers },
     { label: "سُلف خارجية", value: loans },

@@ -25,8 +25,8 @@ import { Logo, LogoIcon } from "@/components/logo";
 import { OpenDay } from "@/components/pos/open-day";
 import { DemoNotice } from "@/components/setup-entry";
 import { cn, useHydrated } from "@/components/ui";
-import { time } from "@/lib/format";
-import { currentShift, useStore } from "@/lib/store";
+import { balanceIds, time } from "@/lib/format";
+import { currentShift, expectedCash, machineBalance, useStore, walletBalance } from "@/lib/store";
 import type { Employee, Shift } from "@/lib/types";
 
 const nav = [
@@ -71,6 +71,8 @@ export default function PosShell({ children }: { children: React.ReactNode }) {
 
   if (!hydrated || !employee || blocked) return null;
   const current = nav.find((n) => (n.href === "/pos" ? pathname === "/pos" : pathname.startsWith(n.href)));
+  // Owner only: employees count the drawer, wallet and machines blind when opening and closing a shift.
+  const showBalances = !!shift && employee.role === "admin";
 
   return (
     <div className="min-h-screen md:flex">
@@ -80,17 +82,20 @@ export default function PosShell({ children }: { children: React.ReactNode }) {
       </aside>
 
       {/* Phone: top bar + slide-in menu */}
-      <header className="sticky top-0 z-30 flex items-center justify-between border-b border-border bg-surface/95 px-4 py-2.5 backdrop-blur md:hidden">
-        <div className="flex items-center gap-2">
-          <LogoIcon size={32} />
-          <div className="leading-tight">
-            <div className="text-sm font-bold">{shift ? (current?.label ?? "موجه") : "موجه"}</div>
-            <div className="text-[11px] text-ink-3">{employee.name}</div>
+      <header className="sticky top-0 z-30 border-b border-border bg-surface/95 backdrop-blur md:hidden">
+        <div className="flex items-center justify-between px-4 py-2.5">
+          <div className="flex items-center gap-2">
+            <LogoIcon size={32} />
+            <div className="leading-tight">
+              <div className="text-sm font-bold">{shift ? (current?.label ?? "موجه") : "موجه"}</div>
+              <div className="text-[11px] text-ink-3">{employee.name}</div>
+            </div>
           </div>
+          <button onClick={() => setMenuOpen(true)} className="rounded-lg p-2 text-ink-2 hover:bg-surface-2" aria-label="القائمة">
+            <Menu size={22} />
+          </button>
         </div>
-        <button onClick={() => setMenuOpen(true)} className="rounded-lg p-2 text-ink-2 hover:bg-surface-2" aria-label="القائمة">
-          <Menu size={22} />
-        </button>
+        {showBalances && <BalancesBar shift={shift} className="border-t border-border" />}
       </header>
       {menuOpen && (
         <div className="fixed inset-0 z-40 md:hidden" onClick={() => setMenuOpen(false)}>
@@ -104,7 +109,32 @@ export default function PosShell({ children }: { children: React.ReactNode }) {
         </div>
       )}
 
-      <main className="min-w-0 flex-1 p-4 md:p-6">{shift || pathname === "/pos/shift" ? children : <OpenDay />}</main>
+      <div className="min-w-0 flex-1">
+        {showBalances && <BalancesBar shift={shift} className="sticky top-0 z-20 hidden border-b border-border bg-surface/95 backdrop-blur md:grid" />}
+        <main className="p-4 md:p-6">{shift || pathname === "/pos/shift" ? children : <OpenDay />}</main>
+      </div>
+    </div>
+  );
+}
+
+const barLabel = { fawry_airtime: "فوري Air time", fawry_general: "فوري عام", momkn: "ممكن" } as const;
+
+/** What the system expects in the drawer, the Vodafone Cash wallet and each machine right now. */
+function BalancesBar({ shift, className }: { shift: Shift; className?: string }) {
+  const store = useStore();
+  const items = [
+    { label: "كاش الدرج", value: expectedCash(store, shift) },
+    { label: "فودافون كاش", value: walletBalance(store) },
+    ...balanceIds.map((id) => ({ label: barLabel[id], value: machineBalance(store, id) })),
+  ];
+  return (
+    <div className={cn("grid grid-cols-5 divide-x divide-x-reverse divide-border", className)} title="حسب السيستم">
+      {items.map((i) => (
+        <div key={i.label} className="min-w-0 px-1 py-1.5 text-center md:py-2.5">
+          <div className="truncate text-[10px] text-ink-3 md:text-xs">{i.label}</div>
+          <div className={cn("num text-xs font-semibold md:text-base", i.value < 0 && "text-bad")}>{Math.round(i.value).toLocaleString("en")}</div>
+        </div>
+      ))}
     </div>
   );
 }

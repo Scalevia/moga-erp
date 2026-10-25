@@ -62,6 +62,7 @@ export const initialContacts: Contact[] = [
   { id: "cus-3", kind: "customer", name: "يوسف خالد", phone: "01234567890", nationalId: "30002021234567" },
   { id: "cus-4", kind: "customer", name: "سارة محمود", phone: "01555555555" },
   { id: "bor-1", kind: "borrower", name: "محمود (البقال اللي جنبنا)", phone: "01200000001" },
+  { id: "bor-2", kind: "borrower", name: "عم سيد (السايس)", phone: "01200000002" },
   { id: "gua-1", kind: "guarantor", name: "خالد فتحي", phone: "01099999999", nationalId: "27001011234567" },
 ];
 
@@ -250,10 +251,20 @@ export const initialPlans: InstallmentPlan[] = [
 // A neighbour borrowed 200 two days ago "until tomorrow" and hasn't returned it yet.
 export const initialLentOut: LentOut[] = [
   { id: "lent-1", borrowerId: "bor-1", amount: 200, repaid: 0, givenAt: isoDaysAgo(2, 16), dueDate: isoDaysAgo(1, 12).slice(0, 10), givenBy: "emp-2", notes: "لحد بكره" },
+  {
+    id: "lent-2", borrowerId: "bor-2", amount: 500, repaid: 300, givenAt: isoDaysAgo(12, 13), dueDate: isoDaysAgo(5, 12).slice(0, 10), givenBy: "emp-1", notes: "لحد أول الشهر",
+    history: [{ at: isoDaysAgo(6, 18), type: "repaid", amount: 300, by: "emp-1", via: "cash" }],
+  },
 ];
 
 export const initialLoans: Loan[] = [
-  { id: "loan-1", lenderId: "len-1", amount: 50000, repaid: 20000, receivedAt: isoDaysAgo(160), notes: "لشراء بضاعة العيد" },
+  {
+    id: "loan-1", lenderId: "len-1", amount: 50000, repaid: 20000, receivedAt: isoDaysAgo(160), receivedBy: "emp-owner", notes: "لشراء بضاعة العيد",
+    history: [
+      { at: isoDaysAgo(120, 19), type: "repaid", amount: 10000, by: "emp-owner", via: "cash" },
+      { at: isoDaysAgo(60, 19), type: "repaid", amount: 10000, by: "emp-owner", via: "cash" },
+    ],
+  },
   { id: "loan-2", lenderId: "len-2", amount: 15000, repaid: 0, receivedAt: isoDaysAgo(25) },
 ];
 

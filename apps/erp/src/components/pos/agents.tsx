@@ -4,7 +4,7 @@ import { CheckCircle2, HandCoins, PackageCheck } from "lucide-react";
 import { useState } from "react";
 import { Badge, Button, Card, Field, Input, Money, Segmented, cn } from "@/components/ui";
 import { balanceLabel, balancesOf, machineLabel, sinceDays } from "@/lib/format";
-import { bonusTotal, daysSince, machineBalance, repBalance, repHistory, repUnpaidSince, useStore } from "@/lib/store";
+import { daysSince, machineBalance, repBalance, repHistory, repUnpaidSince, useStore } from "@/lib/store";
 import type { BalanceId, MachineId } from "@/lib/types";
 
 /**
@@ -37,7 +37,6 @@ export function AgentCard({ id, compact = false }: { id: MachineId; compact?: bo
   const a = Number(amount) || 0;
   const bonusPct = store.bonusPercent[target] ?? 0;
   const bonus = Math.round((a * bonusPct) / 100);
-  const monthBonus = bonusTotal(store, id, new Date().toISOString().slice(0, 7));
   const overpay = mode === "pay" && a > owed;
   const vfFee = method === "wallet" ? Math.round((a * store.settings.agentVfFeePercent) / 100) : 0;
   const methodLabel = { cash: "كاش من الدرج", wallet: "فودافون كاش", instapay: "إنستاباي" }[method];
@@ -46,6 +45,7 @@ export function AgentCard({ id, compact = false }: { id: MachineId; compact?: bo
     if (!a || overpay) return;
     if (mode === "load") {
       // The agent account moves by what we pay; the bonus is extra balance on the machine and counts as profit.
+      // It is shown only on the owner's dashboard, so the texts here leave it out.
       store.recordMovement({
         kind: "rep_load",
         cash: 0,
@@ -55,9 +55,9 @@ export function AgentCard({ id, compact = false }: { id: MachineId; compact?: bo
         machineId: id,
         balanceId: target,
         rep: -a,
-        description: `مندوب ${machineLabel[id]} شحن ${balanceLabel[target]} ${a.toLocaleString("en")}${bonus ? ` + بونص ${bonus.toLocaleString("en")}` : ""}`,
+        description: `مندوب ${machineLabel[id]} شحن ${balanceLabel[target]} ${a.toLocaleString("en")}`,
       });
-      setDone(`اتسجل: ${balanceLabel[target]} زاد ${(a + bonus).toLocaleString("en")}${bonus ? ` (منها بونص ${bonus.toLocaleString("en")})` : ""}`);
+      setDone(`اتسجل: ${balanceLabel[target]} زاد ${(a + bonus).toLocaleString("en")}`);
     } else {
       store.recordMovement({
         kind: "rep_payment",
@@ -87,11 +87,6 @@ export function AgentCard({ id, compact = false }: { id: MachineId; compact?: bo
               {accounts.length > 1 ? balanceLabel[b].replace(`${machineLabel[id]} — `, "") : "رصيد الماكينة"} في السيستم <Money value={machineBalance(store, b)} />
             </div>
           ))}
-          {monthBonus > 0 && (
-            <div className="text-xs text-good">
-              بونص الشهر ده <Money value={monthBonus} />
-            </div>
-          )}
         </div>
         <Badge tone={status.tone} className="shrink-0 whitespace-nowrap">{status.text}</Badge>
       </div>
@@ -153,13 +148,8 @@ export function AgentCard({ id, compact = false }: { id: MachineId; compact?: bo
                   />
                 </div>
               )}
-              {bonusPct > 0 && <p className="text-xs text-good">بونص {bonusPct}% بيتضاف تلقائي على الرصيد ده — بيتحسب ربح</p>}
               {a > 0 && bonusPct > 0 && (
-                <div className="space-y-1 rounded-lg bg-surface-2 px-3 py-2 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-ink-2">البونص</span>
-                    <Money value={bonus} className="text-good" />
-                  </div>
+                <div className="rounded-lg bg-surface-2 px-3 py-2 text-sm">
                   <div className="flex justify-between font-semibold">
                     <span>الرصيد هيزيد</span>
                     <Money value={a + bonus} />

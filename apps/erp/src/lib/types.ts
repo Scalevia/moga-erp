@@ -214,6 +214,7 @@ export interface CashMovement {
   machineId?: MachineId; // company whose agent account `rep` applies to
   balanceId?: BalanceId;
   targetEmployeeId?: string; // whose advance / salary this is
+  contactId?: string; // the supplier a payment went to
   category?: string; // expense category (إيجار، كهرباء…)
   // Effect on the agent account of `machineId`: + means the agent owes us balance, − means we owe the agent.
   rep?: number;
@@ -243,12 +244,24 @@ export interface Shift {
   closingCount?: BalanceCount;
 }
 
+/** One settlement on a debt: a repayment, or the creditor forgiving (part of) it. */
+export interface DebtEvent {
+  at: string;
+  type: "repaid" | "forgiven";
+  amount: number;
+  by: string; // employee id who recorded it
+  via?: "cash" | "wallet";
+  note?: string;
+}
+
 /** Money the shop lent to someone (a neighbour, a friend) — still shop money, expected back. */
 export interface LentOut {
   id: string;
   borrowerId: string;
   amount: number;
   repaid: number;
+  forgiven?: number; // written off by the shop — a loss
+  history?: DebtEvent[];
   givenAt: string;
   dueDate: string; // yyyy-mm-dd
   givenBy: string; // employee id
@@ -260,6 +273,9 @@ export interface Loan {
   lenderId: string;
   amount: number;
   repaid: number;
+  forgiven?: number; // the lender let the shop off this part
+  history?: DebtEvent[];
+  receivedBy?: string;
   receivedAt: string;
   notes?: string;
 }
