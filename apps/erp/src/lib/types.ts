@@ -45,6 +45,21 @@ export interface PurchaseInvoice {
   via: "cash" | "wallet" | "bank";
 }
 
+/**
+ * The owner re-costed a model's stock to today's wholesale price because prices moved while it sat
+ * in the shop. The difference is a gain (or loss) on holding stock, kept apart from sales profit.
+ */
+export interface Revaluation {
+  id: string;
+  at: string;
+  by: string;
+  productId: string;
+  qty: number; // pieces in stock when it was re-costed
+  oldCost: number; // what those pieces cost in total before
+  newUnitCost: number;
+  amount: number; // qty × newUnitCost − oldCost: + prices rose, − prices fell
+}
+
 export interface PayrollEntry {
   id: string;
   employeeId: string;

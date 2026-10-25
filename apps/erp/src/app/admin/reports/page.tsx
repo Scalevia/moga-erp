@@ -3,7 +3,8 @@
 import { ChevronLeft, ChevronRight, Download, RotateCcw } from "lucide-react";
 import { useState } from "react";
 import { Badge, Card, CardHeader, Money, cn } from "@/components/ui";
-import { dailySummaries, dayExpenses, dayKey, dayReport, monthExpenses, monthKey, toCsv, type DaySummary, type ServiceCategory } from "@/lib/analytics";
+import { dailySummaries, dayExpenses, dayKey, dayReport, monthExpenses, monthKey, monthRevaluation, toCsv, type DaySummary, type ServiceCategory } from "@/lib/analytics";
+import { StockPriceLine } from "@/components/stock-price-line";
 import { itemCategoryLabel, num, paymentLabel, time } from "@/lib/format";
 import { openingDiffs } from "@/lib/shifts";
 import { orderDiscount, orderProfit, orderTotal, useStore } from "@/lib/store";
@@ -72,6 +73,7 @@ function MonthView({ month, today, onMonth, onDay }: { month: string; today: str
   );
   const isCurrent = month === today.slice(0, 7);
   const net = t.profit - expenses.total;
+  const stockGain = monthRevaluation(store.revaluations, month);
 
   function exportMonth() {
     const rows: (string | number)[][] = [["اليوم", "التاريخ", "عدد الفواتير", "المبيعات", "الخصومات", "ربح المبيعات", "ربح الخدمات", "مجمل الربح", "مرتجعات"]];
@@ -84,6 +86,7 @@ function MonthView({ month, today, onMonth, onDay }: { month: string; today: str
     rows.push(["مرتبات", "", "", "", "", "", "", -expenses.salaries, ""]);
     if (expenses.shortages) rows.push(["عجز شيفتات", "", "", "", "", "", "", -expenses.shortages, ""]);
     rows.push(["صافي الربح", "", "", "", "", "", "", net, ""]);
+    if (stockGain) rows.push([stockGain > 0 ? "مكسب غلاء البضاعة (بره صافي الربح)" : "خسارة نزول أسعار البضاعة (بره صافي الربح)", "", "", "", "", "", "", stockGain, ""]);
     download(`مبيعات-${month}.csv`, toCsv(rows));
   }
 
@@ -119,6 +122,7 @@ function MonthView({ month, today, onMonth, onDay }: { month: string; today: str
               <Money value={net} className={cn("text-lg font-bold", net < 0 ? "text-bad" : "text-good")} />
             </dd>
           </div>
+          <StockPriceLine value={stockGain} />
         </dl>
       </Card>
 

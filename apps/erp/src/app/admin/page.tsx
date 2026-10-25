@@ -5,7 +5,8 @@ import Link from "next/link";
 import { useState } from "react";
 import { CategoryBars, RevenueProfitChart } from "@/components/admin/charts";
 import { Card, CardHeader, Money, cn } from "@/components/ui";
-import { cashCollected, dayKey, growth, monthExpenses, monthToDate, monthly, profitByCategory, todayStats, type ServiceCategory } from "@/lib/analytics";
+import { cashCollected, dayKey, growth, monthExpenses, monthRevaluation, monthToDate, monthly, profitByCategory, todayStats, type ServiceCategory } from "@/lib/analytics";
+import { StockPriceLine } from "@/components/stock-price-line";
 
 const serviceLabel: Record<ServiceCategory, string> = {
   vodafone_cash: "فودافون كاش (عمولات − رسوم التسييل)",
@@ -33,6 +34,7 @@ export default function Dashboard() {
   const expenses = monthExpenses(store, curr.key, dayOfMonth);
   const net = curr.profit - expenses.total;
   const prevNet = prev.profit - monthExpenses(store, prev.key).total;
+  const stockGain = monthRevaluation(store.revaluations, curr.key, dayOfMonth);
 
   const overdue = store.plans.map((p) => ({ p, o: planOverdue(p) })).filter((x) => x.o.count > 0);
   const lowStock = store.products.filter((p) => p.tracking === "quantity" && p.quantity <= 10);
@@ -134,6 +136,7 @@ export default function Dashboard() {
               <Money value={net} className={cn("text-xl font-bold", net < 0 ? "text-bad" : "text-good")} />
             </dd>
           </div>
+          <StockPriceLine value={stockGain} />
         </dl>
         <p className="px-4 py-2 text-xs text-ink-3">
           الشهر اللي فات كله: صافي <Money value={prevNet} />

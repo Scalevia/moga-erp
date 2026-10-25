@@ -1,7 +1,7 @@
 // Aggregations for the owner dashboard. These become SQL views/RPCs later.
 
 import { orderProfit, orderTotal } from "./store";
-import type { CashMovement, ItemCategory, LentOut, Order, PayrollEntry, PhoneUnit, Product, Shift } from "./types";
+import type { CashMovement, ItemCategory, LentOut, Order, PayrollEntry, PhoneUnit, Product, Revaluation, Shift } from "./types";
 
 // Service commissions and machine bonuses are profit with no revenue line of their own.
 const serviceProfit = (m: CashMovement) => m.commission;
@@ -311,6 +311,16 @@ export function monthExpenses(
     .filter((x) => x.closedAt && inRange(x.closedAt))
     .reduce((a, x) => a + Math.max(0, (x.expectedCash ?? 0) - (x.countedCash ?? 0)), 0);
   return { operating, operatingTotal, salaries, shortages, total: operatingTotal + salaries + shortages };
+}
+
+/**
+ * Gain (+) or loss (−) from prices moving while stock sat in the shop, for a month up to `uptoDay`.
+ * Not part of net profit: it raises the shop's capital, but it's what restocking at the new price costs.
+ */
+export function monthRevaluation(revaluations: Revaluation[], month: string, uptoDay = 31) {
+  return revaluations
+    .filter((r) => monthKey(r.at) === month && Number(dayKey(r.at).slice(8, 10)) <= uptoDay)
+    .reduce((a, r) => a + r.amount, 0);
 }
 
 export function dayExpenses(movements: CashMovement[], day: string) {

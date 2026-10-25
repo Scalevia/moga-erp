@@ -42,6 +42,8 @@ import type {
   Payment,
   PhoneUnit,
   Product,
+  ProductCategory,
+  Revaluation,
   Shift,
   UsedInspection,
 } from "./types";
@@ -114,6 +116,7 @@ interface State {
   settings: ShopSettings;
   purchases: PurchaseInvoice[];
   payroll: PayrollEntry[];
+  revaluations: Revaluation[];
   isDemo: boolean;
   currentEmployeeId: string | null;
 
@@ -147,6 +150,10 @@ interface State {
   /** Pay a supplier part of what the shop owes them. */
   paySupplier: (input: { supplierId: string; amount: number; via: "cash" | "wallet" | "bank"; note?: string }) => void;
   addProduct: (input: NewProductInput) => string;
+  /** New selling price; with `unitCost`, also re-costs the pieces in stock to today's wholesale price. */
+  repriceProduct: (input: { productId: string; retailPrice: number; unitCost?: number }) => void;
+  /** Raise (or lower) the selling price of a whole category by a percentage, rounded to 5. */
+  repriceCategory: (input: { category: ProductCategory; percent: number }) => void;
   payInstallment: (planId: string, amount: number, method: Payment["method"]) => void;
   addLoan: (lenderName: string, lenderPhone: string, amount: number, notes?: string) => void;
   repayLoan: (loanId: string, amount: number) => void;
@@ -186,6 +193,7 @@ function initialState() {
     settings: initialSettings,
     purchases: [] as PurchaseInvoice[],
     payroll: initialPayroll,
+    revaluations: [] as Revaluation[],
     currentEmployeeId: null as string | null,
   };
 }
@@ -419,6 +427,36 @@ export const useStore = create<State>()(
           return id;
         },
 
+        repriceProduct: ({ productId, retailPrice, unitCost }) => {
+          const s = get();
+          const product = s.products.find((p) => p.id === productId);
+          if (!product) return;
+          set((st) => ({ products: st.products.map((p) => (p.id === productId ? { ...p, retailPrice } : p)) }));
+          if (unitCost === undefined) return;
+
+          const pieces = product.tracking === "imei" ? s.units.filter((u) => u.productId === productId && u.status === "in_stock") : [];
+          const qty = product.tracking === "imei" ? pieces.length : product.quantity;
+          const oldCost = product.tracking === "imei" ? pieces.reduce((a, u) => a + u.cost, 0) : product.quantity * product.avgCost;
+          if (product.tracking === "imei") {
+            const imeis = new Set(pieces.map((u) => u.imei));
+            set((st) => ({ units: st.units.map((u) => (imeis.has(u.imei) ? { ...u, cost: unitCost } : u)) }));
+          } else {
+            set((st) => ({ products: st.products.map((p) => (p.id === productId ? { ...p, avgCost: unitCost } : p)) }));
+          }
+          const amount = qty * unitCost - oldCost;
+          if (qty > 0 && amount !== 0) {
+            const entry: Revaluation = { id: uid("rv"), at: nowIso(), by: s.currentEmployeeId ?? "unknown", productId, qty, oldCost, newUnitCost: unitCost, amount };
+            set((st) => ({ revaluations: [...st.revaluations, entry] }));
+          }
+        },
+
+        repriceCategory: ({ category, percent }) =>
+          set((st) => ({
+            products: st.products.map((p) =>
+              p.category === category ? { ...p, retailPrice: Math.max(5, Math.round((p.retailPrice * (1 + percent / 100)) / 5) * 5) } : p,
+            ),
+          })),
+
         payInstallment: (planId, amount, method) => {
           let remaining = amount;
           set((st) => ({
@@ -580,6 +618,7 @@ export const useStore = create<State>()(
             lentOut: [],
             purchases: [],
             payroll: [],
+            revaluations: [],
             nextOrderNo: 1,
             isDemo: false,
             currentEmployeeId: null,
