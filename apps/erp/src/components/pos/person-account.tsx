@@ -100,7 +100,7 @@ export function PersonAccountModal({ phone, onClose }: { phone: string; onClose:
                 <HeartHandshake size={15} /> مسامحة
               </Button>
             )}
-            {account.shopOwes > 0 && isOwner && (
+            {account.shopOwes > 0 && (
               <Button size="sm" onClick={() => open("repayOurs")}>
                 <HandCoins size={15} /> سدّدنا له
               </Button>
