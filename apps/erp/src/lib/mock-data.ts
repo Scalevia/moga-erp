@@ -15,6 +15,7 @@ import type {
   BalanceId,
   MachineId,
   PayrollEntry,
+  PurchaseInvoice,
   Shift,
   ShopSettings,
 } from "./types";
@@ -363,6 +364,76 @@ export const initialShifts: Shift[] = [
   },
 ];
 
+// --- Supplier deliveries behind the stock above --------------------------
+// Each supplier's phones arrive in a few deliveries; accessories come from the accessories store.
+// No rand() here, so the rest of the demo data stays the same. Payments at delivery are real cash
+// movements in older (already counted) shifts; whatever is still unpaid is part of supplierPayables.
+const purchases: PurchaseInvoice[] = [];
+{
+  const deliveries: { supplierId: string; at: string; lines: PurchaseInvoice["lines"] }[] = [];
+  for (const supplierId of ["sup-1", "sup-2"]) {
+    const mine = units.filter((u) => u.supplierId === supplierId).sort((a, b) => a.purchasedAt.localeCompare(b.purchasedAt));
+    for (let i = 0; i < mine.length; i += 5) {
+      const batch = mine.slice(i, i + 5);
+      for (const u of batch) u.purchasedAt = batch[0].purchasedAt;
+      const lines: PurchaseInvoice["lines"] = [];
+      for (const u of batch) {
+        const line = lines.find((l) => l.productId === u.productId && l.unitCost === u.cost);
+        if (line) {
+          line.qty++;
+          line.imeis!.push(u.imei);
+        } else {
+          lines.push({ productId: u.productId, name: initialProducts.find((p) => p.id === u.productId)!.name, qty: 1, unitCost: u.cost, imeis: [u.imei] });
+        }
+      }
+      deliveries.push({ supplierId, at: batch[0].purchasedAt, lines });
+    }
+  }
+  const qtyLine = (productId: string, qty: number) => {
+    const p = initialProducts.find((x) => x.id === productId)!;
+    return { productId, name: p.name, qty, unitCost: p.avgCost };
+  };
+  deliveries.push({ supplierId: "sup-3", at: isoDaysAgo(26, 14), lines: [qtyLine("p-cbl", 30), qtyLine("p-chg", 6), qtyLine("p-ear", 10)] });
+  deliveries.push({ supplierId: "sup-3", at: isoDaysAgo(9, 13), lines: [qtyLine("p-case", 50), qtyLine("p-scr", 80), qtyLine("p-pb", 5)] });
+  deliveries.push({ supplierId: "sup-2", at: isoDaysAgo(18, 15), lines: [qtyLine("p-n105", 10), qtyLine("p-it2", 12)] });
+  deliveries.sort((a, b) => a.at.localeCompare(b.at));
+
+  // Newest deliveries are the unpaid ones, up to what each supplier is still owed.
+  const owed = { ...openingBalances.supplierPayables };
+  const paidAt = new Map<number, number>();
+  for (let i = deliveries.length - 1; i >= 0; i--) {
+    const d = deliveries[i];
+    const total = d.lines.reduce((a, l) => a + l.qty * l.unitCost, 0);
+    const unpaid = Math.min(total, owed[d.supplierId] ?? 0);
+    owed[d.supplierId] -= unpaid;
+    paidAt.set(i, total - unpaid);
+  }
+  deliveries.forEach((d, i) => {
+    const total = d.lines.reduce((a, l) => a + l.qty * l.unitCost, 0);
+    const paid = paidAt.get(i) ?? 0;
+    const employeeId = i % 2 ? "emp-2" : "emp-1";
+    const number = i + 1;
+    purchases.push({ id: `pur-${number}`, number, supplierId: d.supplierId, supplierRef: String(4100 + number * 37), createdAt: d.at, employeeId, lines: d.lines, total, paid, via: "cash" });
+    if (paid) {
+      const day = Math.max(2, Math.round((NOW - new Date(d.at).getTime()) / DAY));
+      initialMovements.push({
+        id: `mv-pur-${number}`,
+        createdAt: d.at,
+        shiftId: `shift-hist-${day}`,
+        employeeId,
+        kind: "supplier_payment",
+        cash: -paid,
+        wallet: 0,
+        topup: 0,
+        commission: 0,
+        contactId: d.supplierId,
+        description: `دفعة لـ ${initialContacts.find((c) => c.id === d.supplierId)!.name} — فاتورة استلام #${number}`,
+      });
+    }
+  });
+}
+
+export const initialPurchases = purchases;
 export const initialUnits = units;
 export const initialOrders = orders;
 export const initialOrderNo = orderNo;

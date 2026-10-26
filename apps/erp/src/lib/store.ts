@@ -16,6 +16,7 @@ import {
   initialPlans,
   initialProducts,
   initialPayroll,
+  initialPurchases,
   initialSettings,
   initialShifts,
   initialStaff,
@@ -45,8 +46,10 @@ import type {
   ProductCategory,
   Revaluation,
   Shift,
+  ShopService,
   UsedInspection,
 } from "./types";
+import { defaultServices } from "./format";
 
 const uid = (p: string) => `${p}-${Math.random().toString(36).slice(2, 9)}`;
 const nowIso = () => new Date().toISOString();
@@ -117,6 +120,7 @@ interface State {
   purchases: PurchaseInvoice[];
   payroll: PayrollEntry[];
   revaluations: Revaluation[];
+  services: ShopService[];
   isDemo: boolean;
   currentEmployeeId: string | null;
 
@@ -145,6 +149,7 @@ interface State {
   updateEmployee: (id: string, patch: Partial<Pick<Employee, "name" | "phone" | "salary" | "role" | "active">>) => void;
   deleteEmployee: (id: string) => void;
   updateSettings: (patch: Partial<ShopSettings>) => void;
+  setServices: (list: ShopService[]) => void;
   paySalary: (input: { employeeId: string; month: string; via: "cash" | "wallet" | "bank" }) => PayrollEntry;
   addSupplier: (input: { name: string; phone: string }) => string;
   /** Pay a supplier part of what the shop owes them. */
@@ -191,9 +196,10 @@ function initialState() {
     isDemo: true,
     staff: initialStaff,
     settings: initialSettings,
-    purchases: [] as PurchaseInvoice[],
+    purchases: initialPurchases,
     payroll: initialPayroll,
     revaluations: [] as Revaluation[],
+    services: defaultServices,
     currentEmployeeId: null as string | null,
   };
 }
@@ -388,6 +394,8 @@ export const useStore = create<State>()(
         deleteEmployee: (id) => set((st) => ({ staff: st.staff.filter((e) => e.id !== id) })),
 
         updateSettings: (patch) => set((st) => ({ settings: { ...st.settings, ...patch } })),
+
+        setServices: (list) => set({ services: list }),
 
         paySalary: ({ employeeId, month, via }) => {
           const s = get();
@@ -628,7 +636,7 @@ export const useStore = create<State>()(
       };
     },
     {
-      name: "moga-demo-v16",
+      name: "moga-demo-v17",
       storage: idbStorage,
     },
   ),

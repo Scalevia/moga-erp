@@ -5,7 +5,7 @@ import { useMemo, useRef, useState } from "react";
 import { CheckoutModal } from "@/components/pos/checkout";
 import { ReceiptModal } from "@/components/pos/receipt";
 import { Badge, Button, Card, Field, Input, Modal, Money, Textarea, cn } from "@/components/ui";
-import { OTHER_SERVICE_ID, categoryLabel, itemCategoryLabel, shopServices } from "@/lib/format";
+import { OTHER_SERVICE_ID, categoryLabel, itemCategoryLabel } from "@/lib/format";
 import { useStore } from "@/lib/store";
 import type { Order, OrderItem, PhoneUnit, Product } from "@/lib/types";
 
@@ -14,6 +14,7 @@ type CartLine = OrderItem & { key: string; available: number };
 export default function SalePage() {
   const products = useStore((s) => s.products);
   const units = useStore((s) => s.units);
+  const services = useStore((s) => s.services);
   const employeeId = useStore((s) => s.currentEmployeeId);
   const employees = useStore((s) => s.staff);
   const isAdmin = employees.find((e) => e.id === employeeId)?.role === "admin";
@@ -153,7 +154,7 @@ export default function SalePage() {
             <Wrench size={15} /> خدمات
           </div>
           <div className="flex flex-wrap gap-2">
-            {shopServices.map((svc) => (
+            {services.map((svc) => (
               <button
                 key={svc.id}
                 onClick={() => setServiceDraft({ id: svc.id, name: svc.name })}

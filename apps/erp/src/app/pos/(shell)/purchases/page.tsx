@@ -1,9 +1,13 @@
 "use client";
 
-import { CheckCircle2, Plus, Trash2 } from "lucide-react";
+import { CheckCircle2, ChevronLeft, Plus, Search, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
-import { Badge, Button, Card, CardHeader, Combobox, Field, Input, Modal, Money, PageHeader, Segmented, Textarea, cn } from "@/components/ui";
+import { SupplierAccountModal } from "@/components/pos/account-modals";
+import { InvoiceStatus, PurchaseInvoiceModal } from "@/components/pos/purchase-invoice";
+import { Badge, Button, Card, CardHeader, Combobox, Field, Input, Modal, Money, PageHeader, Segmented, Select, Textarea, cn } from "@/components/ui";
+import { monthKey } from "@/lib/analytics";
 import { categoryLabel, date } from "@/lib/format";
+import { invoicePieces, invoiceRemaining } from "@/lib/purchases";
 import { useStore } from "@/lib/store";
 import type { ProductCategory, PurchaseInvoice } from "@/lib/types";
 
@@ -16,14 +20,177 @@ interface Line {
 }
 
 const newLine = (): Line => ({ key: Math.random().toString(36).slice(2, 9), productId: "", imeiText: "", qty: "", cost: "" });
-const viaLabel = { cash: "كاش من الدرج", wallet: "فودافون كاش", bank: "إنستاباي" } as const;
 
 export default function PurchasesPage() {
+  const count = useStore((s) => s.purchases.length);
+  const [tab, setTab] = useState<"new" | "list">("new");
+  const [invoiceId, setInvoiceId] = useState<string | null>(null);
+  const [supplierId, setSupplierId] = useState<string | null>(null);
+
+  return (
+    <div className="mx-auto max-w-5xl">
+      <PageHeader title="استلام بضاعة" subtitle={tab === "new" ? "فاتورة واحدة فيها كل الأصناف — والباقي بيتسجل على حساب المورد" : "كل فواتير الاستلام — اضغط على أي فاتورة تشوف تفاصيلها"} />
+      <Segmented
+        value={tab}
+        onChange={setTab}
+        className="mb-4 grid w-full grid-cols-2 sm:w-96 [&>button]:py-2.5"
+        options={[
+          { value: "new", label: "استلام جديد" },
+          { value: "list", label: `الفواتير (${count})` },
+        ]}
+      />
+      {tab === "new" ? <ReceiveForm onOpenInvoice={setInvoiceId} /> : <InvoicesTab onOpen={setInvoiceId} />}
+
+      {invoiceId && (
+        <PurchaseInvoiceModal
+          invoiceId={invoiceId}
+          onClose={() => setInvoiceId(null)}
+          onOpenSupplier={() => {
+            setSupplierId(useStore.getState().purchases.find((x) => x.id === invoiceId)?.supplierId ?? null);
+            setInvoiceId(null);
+          }}
+        />
+      )}
+      {supplierId && <SupplierAccountModal supplierId={supplierId} onClose={() => setSupplierId(null)} />}
+    </div>
+  );
+}
+
+/** Past deliveries: by month and supplier, searchable by invoice number, product or IMEI. */
+function InvoicesTab({ onOpen }: { onOpen: (id: string) => void }) {
+  const store = useStore();
+  const { purchases, contacts, staff } = store;
+  const isOwner = staff.find((e) => e.id === store.currentEmployeeId)?.role === "admin";
+  const [now] = useState(() => new Date().toISOString());
+  const months = [...new Set([monthKey(now), ...purchases.map((p) => monthKey(p.createdAt))])].sort().reverse();
+  const [month, setMonth] = useState(months[0]);
+  const [supplier, setSupplier] = useState("all");
+  const [q, setQ] = useState("");
+  const remaining = invoiceRemaining(purchases, store.supplierPayables);
+  const name = (id: string) => contacts.find((c) => c.id === id)?.name ?? "—";
+
+  const term = q.trim();
+  const imeiHit = (inv: PurchaseInvoice) => (term.length >= 4 ? inv.lines.flatMap((l) => l.imeis ?? []).find((x) => x.includes(term)) : undefined);
+  const matches = (inv: PurchaseInvoice) =>
+    String(inv.number) === term.replace("#", "") || !!inv.supplierRef?.includes(term) || inv.lines.some((l) => l.name.toLowerCase().includes(term.toLowerCase())) || !!imeiHit(inv);
+  // A search looks through every month; otherwise show the chosen month.
+  const list = purchases
+    .filter((inv) => (term ? matches(inv) : monthKey(inv.createdAt) === month) && (supplier === "all" || inv.supplierId === supplier))
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+
+  const total = list.reduce((a, inv) => a + inv.total, 0);
+  const paid = list.reduce((a, inv) => a + inv.paid, 0);
+  const bySupplier = [...new Set(list.map((inv) => inv.supplierId))]
+    .map((id) => ({ id, total: list.filter((x) => x.supplierId === id).reduce((a, x) => a + x.total, 0), count: list.filter((x) => x.supplierId === id).length }))
+    .sort((a, b) => b.total - a.total);
+
+  return (
+    <div className="space-y-3">
+      <div className="grid gap-2 sm:grid-cols-[1fr_1fr_2fr]">
+        <Select value={month} onChange={(e) => setMonth(e.target.value)} disabled={!!term} aria-label="الشهر">
+          {months.map((m) => (
+            <option key={m} value={m}>
+              {monthFmt.format(new Date(`${m}-15T00:00:00Z`))}
+            </option>
+          ))}
+        </Select>
+        <Select value={supplier} onChange={(e) => setSupplier(e.target.value)} aria-label="المورد">
+          <option value="all">كل الموردين</option>
+          {contacts
+            .filter((c) => c.kind === "supplier")
+            .map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+        </Select>
+        <div className="relative">
+          <Search size={15} className="pointer-events-none absolute start-3 top-1/2 -translate-y-1/2 text-ink-3" />
+          <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="رقم فاتورة، منتج، أو IMEI" className="ps-9" />
+        </div>
+      </div>
+      {term && <p className="text-xs text-ink-3">بيدوّر في كل الشهور</p>}
+
+      {isOwner && !term && list.length > 0 && (
+        <Card className="p-4">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <SummaryTile label="فواتير" value={<span className="num">{list.length}</span>} sub={`${list.reduce((a, inv) => a + invoicePieces(inv), 0)} قطعة`} />
+            <SummaryTile label="إجمالي المشتريات" value={<Money value={total} />} />
+            <SummaryTile label="اتدفع وقت الاستلام" value={<Money value={paid} />} />
+            <SummaryTile label="اتضاف على الحساب" value={<Money value={total - paid} />} />
+          </div>
+          {supplier === "all" && bySupplier.length > 1 && (
+            <ul className="mt-4 space-y-2 border-t border-border pt-3 text-sm">
+              {bySupplier.map((s) => (
+                <li key={s.id}>
+                  <div className="flex justify-between gap-3">
+                    <span className="min-w-0 truncate">
+                      {name(s.id)} <span className="text-xs text-ink-3">· {s.count} فاتورة</span>
+                    </span>
+                    <Money value={s.total} className="shrink-0 font-semibold" />
+                  </div>
+                  <div className="mt-1 h-1.5 rounded-full bg-surface-2">
+                    <div className="h-full rounded-full bg-brand" style={{ width: `${(s.total / total) * 100}%` }} />
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
+      )}
+
+      <Card>
+        {list.length === 0 ? (
+          <div className="px-4 py-10 text-center text-sm text-ink-3">{term ? "مفيش فاتورة بالشكل ده" : "مفيش فواتير استلام في الشهر ده"}</div>
+        ) : (
+          <ul className="divide-y divide-border">
+            {list.map((inv) => {
+              const hit = imeiHit(inv);
+              return (
+                <li key={inv.id}>
+                  <button onClick={() => onOpen(inv.id)} className="flex w-full items-center gap-3 px-4 py-3 text-start hover:bg-surface-2">
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate font-medium">
+                        #{inv.number} · {name(inv.supplierId)}
+                      </span>
+                      <span className="block text-xs text-ink-3">
+                        {date(inv.createdAt)} · {invoicePieces(inv)} قطعة · استلم {staff.find((e) => e.id === inv.employeeId)?.name ?? "—"}
+                      </span>
+                      {hit && <span className="num mt-0.5 block text-xs text-brand">فيها IMEI {hit}</span>}
+                    </span>
+                    <span className="shrink-0 text-end">
+                      <Money value={inv.total} className="block font-semibold" />
+                      <InvoiceStatus total={inv.total} remaining={remaining.get(inv.id) ?? 0} />
+                    </span>
+                    <ChevronLeft size={16} className="shrink-0 text-ink-3" />
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </Card>
+    </div>
+  );
+}
+
+function SummaryTile({ label, value, sub }: { label: string; value: React.ReactNode; sub?: string }) {
+  return (
+    <div>
+      <div className="text-xs text-ink-3">{label}</div>
+      <div className="mt-0.5 text-lg font-bold">{value}</div>
+      {sub && <div className="text-xs text-ink-3">{sub}</div>}
+    </div>
+  );
+}
+
+const monthFmt = new Intl.DateTimeFormat("ar-EG-u-nu-latn", { month: "long", year: "numeric", timeZone: "UTC" });
+
+function ReceiveForm({ onOpenInvoice }: { onOpenInvoice: (id: string) => void }) {
   const contacts = useStore((s) => s.contacts);
   const products = useStore((s) => s.products);
   const units = useStore((s) => s.units);
   const payables = useStore((s) => s.supplierPayables);
-  const purchases = useStore((s) => s.purchases);
   const receiveDelivery = useStore((s) => s.receiveDelivery);
 
   const suppliers = contacts.filter((c) => c.kind === "supplier");
@@ -92,11 +259,16 @@ export default function PurchasesPage() {
   }
 
   return (
-    <div className="mx-auto max-w-5xl">
-      <PageHeader title="استلام بضاعة من مورد" subtitle="فاتورة واحدة فيها كل الأصناف — والباقي بيتسجل على حساب المورد" />
+    <div>
       {done && (
-        <div className="mb-4 flex items-center gap-2 rounded-lg bg-good-soft px-4 py-3 text-sm text-good">
-          <CheckCircle2 size={16} /> فاتورة استلام #{done.number} من {supplierName(done.supplierId)}: {done.lines.reduce((a, l) => a + l.qty, 0)} قطعة بـ <Money value={done.total} /> — اتضافت للمخزن
+        <div className="mb-4 flex flex-wrap items-center gap-2 rounded-lg bg-good-soft px-4 py-3 text-sm text-good">
+          <CheckCircle2 size={16} className="shrink-0" />
+          <span>
+            فاتورة استلام #{done.number} من {supplierName(done.supplierId)}: {done.lines.reduce((a, l) => a + l.qty, 0)} قطعة بـ <Money value={done.total} /> — اتضافت للمخزن
+          </span>
+          <button onClick={() => onOpenInvoice(done.id)} className="font-semibold underline underline-offset-2">
+            شوف الفاتورة
+          </button>
         </div>
       )}
 
@@ -230,29 +402,6 @@ export default function PurchasesPage() {
               </Button>
             </div>
           </Card>
-
-          {purchases.length > 0 && (
-            <Card>
-              <CardHeader title="آخر فواتير استلام" />
-              <ul className="divide-y divide-border text-sm">
-                {[...purchases].reverse().slice(0, 5).map((p) => (
-                  <li key={p.id} className="px-4 py-2.5">
-                    <div className="flex justify-between">
-                      <span className="font-medium">
-                        #{p.number} · {supplierName(p.supplierId)}
-                      </span>
-                      <Money value={p.total} className="font-semibold" />
-                    </div>
-                    <div className="text-xs text-ink-3">
-                      {date(p.createdAt)} · {p.lines.reduce((a, l) => a + l.qty, 0)} قطعة
-                      {p.supplierRef && ` · فاتورة المورد ${p.supplierRef}`}
-                      {p.paid > 0 && ` · اتدفع ${p.paid.toLocaleString("en")} (${viaLabel[p.via]})`}
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            </Card>
-          )}
         </div>
       </div>
 

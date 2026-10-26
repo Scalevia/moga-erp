@@ -1,4 +1,4 @@
-import type { BalanceId, ItemCategory, LedgerKind, MachineId, PaymentMethod, ProductCategory } from "./types";
+import type { BalanceId, ItemCategory, LedgerKind, MachineId, PaymentMethod, ProductCategory, ShopService } from "./types";
 
 export const machineLabel: Record<MachineId, string> = {
   fawry: "فوري",
@@ -77,14 +77,14 @@ export const categoryLabel: Record<ProductCategory, string> = {
 
 export const itemCategoryLabel: Record<ItemCategory, string> = { ...categoryLabel, service: "خدمة" };
 
-/** Services the shop performs, sold from the sale screen. The employee enters cost and price each time. */
-export const shopServices = [
+/** Starting list of services sold from the sale screen; the owner edits it in settings. The employee enters cost and price each time. */
+export const defaultServices: ShopService[] = [
   { id: "svc-google", name: "عمل حساب جوجل / متجر" },
   { id: "svc-apps", name: "تحميل برامج وألعاب" },
   { id: "svc-transfer", name: "نقل بيانات من موبايل لموبايل" },
   { id: "svc-software", name: "تحديث سوفت وير / فورمات" },
   { id: "svc-setup", name: "إعداد واتساب أو آي كلاود" },
-] as const;
+];
 export const OTHER_SERVICE_ID = "svc-other";
 
 export const paymentLabel: Record<PaymentMethod, string> = {

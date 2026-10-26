@@ -1,6 +1,6 @@
 "use client";
 
-import { CheckCircle2, HandCoins } from "lucide-react";
+import { CheckCircle2, ChevronRight, HandCoins } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 import { Badge, Button, Field, Input, Modal, Money, Segmented, cn } from "@/components/ui";
@@ -8,6 +8,7 @@ import { balanceLabel, date, machineLabel } from "@/lib/format";
 import { planOverdue, planRemaining, repBalance, useStore } from "@/lib/store";
 import type { MachineId } from "@/lib/types";
 import { AgentCard } from "./agents";
+import { InvoiceDetails } from "./purchase-invoice";
 import { CallButton, Statement, type Line } from "./statement";
 
 const owesDescribe = (b: number) => (b > 0 ? `عليك ${b.toLocaleString("en")}` : b < 0 ? `ليك ${(-b).toLocaleString("en")}` : "خالص");
@@ -21,7 +22,19 @@ export function SupplierAccountModal({ supplierId, onClose }: { supplierId: stri
   const [amount, setAmount] = useState("");
   const [via, setVia] = useState<"cash" | "wallet" | "bank">("cash");
   const [done, setDone] = useState<string | null>(null);
+  const [invoiceId, setInvoiceId] = useState<string | null>(null);
   if (!supplier) return null;
+  const invoice = store.purchases.find((x) => x.id === invoiceId);
+
+  if (invoice)
+    return (
+      <Modal open onClose={onClose} title={`فاتورة استلام #${invoice.number}`} width="max-w-lg">
+        <button onClick={() => setInvoiceId(null)} className="mb-3 flex items-center gap-1 text-sm text-brand">
+          <ChevronRight size={16} /> رجوع لكشف الحساب
+        </button>
+        <InvoiceDetails invoiceId={invoice.id} />
+      </Modal>
+    );
 
   // Balance from the shop's side: positive = the shop owes the supplier.
   const lines: Line[] = [];
@@ -34,6 +47,7 @@ export function SupplierAccountModal({ supplierId, onClose }: { supplierId: stri
       change: inv.total,
       by: inv.employeeId,
       note: `${pieces} قطعة${inv.supplierRef ? ` · فاتورة المورد ${inv.supplierRef}` : ""}`,
+      onOpen: () => setInvoiceId(inv.id),
     });
   }
   for (const m of store.movements.filter((x) => x.kind === "supplier_payment" && x.contactId === supplierId)) {

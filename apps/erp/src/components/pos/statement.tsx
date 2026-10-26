@@ -1,6 +1,6 @@
 "use client";
 
-import { Phone } from "lucide-react";
+import { ChevronLeft, Phone } from "lucide-react";
 import { cn } from "@/components/ui";
 import { dateTime } from "@/lib/format";
 import { useStore } from "@/lib/store";
@@ -29,6 +29,7 @@ export interface Line {
   by?: string;
   via?: "cash" | "wallet" | "bank";
   note?: string;
+  onOpen?: () => void; // the line opens its source (e.g. a supplier invoice)
 }
 
 const viaLabel = { cash: "كاش", wallet: "فودافون كاش", bank: "إنستاباي" } as const;
@@ -51,9 +52,16 @@ export function Statement({ lines, describe, upIsGood, legend }: { lines: Line[]
       ) : (
         <ul className="divide-y divide-border rounded-lg border border-border text-sm">
           {withBalance.reverse().map((l) => (
-            <li key={l.key} className="flex items-start justify-between gap-3 px-3 py-2.5">
+            <li
+              key={l.key}
+              onClick={l.onOpen}
+              className={cn("flex items-start justify-between gap-3 px-3 py-2.5", l.onOpen && "cursor-pointer hover:bg-surface-2")}
+            >
               <div className="min-w-0">
-                <div className="font-medium">{l.label}</div>
+                <div className={cn("font-medium", l.onOpen && "text-brand")}>
+                  {l.label}
+                  {l.onOpen && <ChevronLeft size={14} className="ms-1 inline" />}
+                </div>
                 <div className="text-xs text-ink-3">
                   {l.at ? dateTime(l.at) : "قبل السيستم"}
                   {name(l.by) && ` · ${name(l.by)}`}

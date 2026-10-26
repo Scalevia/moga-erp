@@ -1,6 +1,6 @@
 "use client";
 
-import { CheckCircle2 } from "lucide-react";
+import { CheckCircle2, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { Logo } from "@/components/logo";
 import { Button, Card, CardHeader, Field, Input, Textarea } from "@/components/ui";
@@ -11,6 +11,17 @@ export default function SettingsPage() {
   const airtimeBonus = useStore((s) => s.bonusPercent.fawry_airtime);
   const updateSettings = useStore((s) => s.updateSettings);
   const setBonusPercent = useStore((s) => s.setBonusPercent);
+  const savedServices = useStore((s) => s.services);
+  const setServices = useStore((s) => s.setServices);
+  const [services, setServiceList] = useState(savedServices);
+  const editServices = (list: typeof services) => {
+    setServiceList(list);
+    setSaved(false);
+  };
+  function addService() {
+    const n = Math.max(0, ...services.map((s) => Number(s.id.match(/^svc-n(\d+)$/)?.[1] ?? 0))) + 1;
+    editServices([...services, { id: `svc-n${n}`, name: "" }]);
+  }
 
   const [f, setF] = useState({
     shopName: settings.shopName,
@@ -41,6 +52,9 @@ export default function SettingsPage() {
       employeeLendLimit: Number(f.employeeLendLimit) || 0,
     });
     setBonusPercent("fawry_airtime", Number(f.airtimeBonus) || 0);
+    const cleaned = services.map((s) => ({ ...s, name: s.name.trim() })).filter((s) => s.name);
+    setServices(cleaned);
+    setServiceList(cleaned);
     setSaved(true);
   }
 
@@ -82,6 +96,32 @@ export default function SettingsPage() {
             <div className="my-2 border-t border-dashed border-black" />
             <p className="text-[10.5px]">{f.warranty}</p>
           </div>
+        </div>
+      </Card>
+
+      <Card>
+        <CardHeader title="الخدمات" subtitle="بتظهر في شاشة البيع — «أخرى» موجودة دايماً" />
+        <div className="space-y-2 p-4">
+          {services.map((s) => (
+            <div key={s.id} className="flex items-center gap-2">
+              <Input
+                value={s.name}
+                onChange={(e) => editServices(services.map((x) => (x.id === s.id ? { ...x, name: e.target.value } : x)))}
+                placeholder="اسم الخدمة"
+                aria-label="اسم الخدمة"
+              />
+              <button
+                onClick={() => editServices(services.filter((x) => x.id !== s.id))}
+                className="shrink-0 rounded-lg p-2 text-ink-3 hover:bg-bad-soft hover:text-bad"
+                aria-label={`حذف ${s.name}`}
+              >
+                <Trash2 size={16} />
+              </button>
+            </div>
+          ))}
+          <Button size="sm" variant="secondary" onClick={addService}>
+            <Plus size={14} /> خدمة جديدة
+          </Button>
         </div>
       </Card>
 

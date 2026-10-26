@@ -23,6 +23,12 @@ export interface ShopSettings {
   employeeLendLimit: number;
 }
 
+/** A service on the sale screen's quick list (e.g. "نقل بيانات"). */
+export interface ShopService {
+  id: string;
+  name: string;
+}
+
 export interface PurchaseLine {
   productId: string;
   name: string;
