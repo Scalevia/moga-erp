@@ -4,13 +4,15 @@ import { RotateCcw, Search } from "lucide-react";
 import { useState } from "react";
 import { Badge, Button, Card, CardHeader, Input, Money, PageHeader } from "@/components/ui";
 import { dateTime, paymentLabel } from "@/lib/format";
-import { orderTotal, useStore } from "@/lib/store";
+import { orderTotal, planRemaining, refundFor, useStore } from "@/lib/store";
 
 export default function ReturnsPage() {
   const orders = useStore((s) => s.orders);
   const employees = useStore((s) => s.staff);
   const contacts = useStore((s) => s.contacts);
   const returnOrder = useStore((s) => s.returnOrder);
+  const plans = useStore((s) => s.plans);
+  const movements = useStore((s) => s.movements);
   const [q, setQ] = useState("");
   const [reason, setReason] = useState("");
 
@@ -19,6 +21,7 @@ export default function ReturnsPage() {
     ? orders.find((o) => String(o.number) === code.replace("#", "") || o.items.some((i) => i.imei === code))
     : undefined;
   const customer = contacts.find((c) => c.id === order?.customerId);
+  const refund = order?.status === "completed" ? refundFor({ plans, movements }, order) : null;
 
   return (
     <div className="mx-auto max-w-2xl">
@@ -56,17 +59,48 @@ export default function ReturnsPage() {
               <Money value={orderTotal(order)} />
             </div>
           </div>
-          {order.status === "completed" && (
+          {order.status === "completed" && refund && (
             <div className="space-y-3 border-t border-border p-4">
+              <div className="rounded-lg border border-border p-3 text-sm">
+                <div className="mb-1.5 font-semibold">هيرجع للزبون</div>
+                <dl className="space-y-1">
+                  {refund.cash > 0 && <RefundLine label="كاش من الدرج" value={refund.cash} />}
+                  {refund.wallet > 0 && <RefundLine label="فودافون كاش من المحفظة" value={refund.wallet} />}
+                  {refund.bank > 0 && <RefundLine label="إنستاباي / فيزا من حساب البنك" value={refund.bank} />}
+                  <div className="flex justify-between border-t border-border pt-1 font-semibold">
+                    <dt>الإجمالي</dt>
+                    <dd>
+                      <Money value={refund.total} />
+                    </dd>
+                  </div>
+                </dl>
+                {refund.plan && (
+                  <p className="mt-2 rounded-md bg-warn-soft px-2.5 py-1.5 text-xs text-warn">
+                    بيعة تقسيط: المبلغ ده فيه المقدم{refund.installments > 0 && <> وأقساط اتدفعت <Money value={refund.installments} /></>}. خطة الأقساط هتتلغي، والباقي على الزبون (
+                    <Money value={planRemaining(refund.plan)} />) مش هيتحصّل.
+                  </p>
+                )}
+              </div>
               <Input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="سبب المرتجع (مطلوب)" />
               <Button variant="danger" size="lg" className="w-full" disabled={!reason} onClick={() => returnOrder(order.id)}>
                 <RotateCcw size={18} /> تأكيد المرتجع ورد الفلوس
               </Button>
-              <p className="text-xs text-ink-3">الأجهزة هترجع المخزن، والربح هيتلغي، والكاش هيتخصم من الدرج. العملية بتتسجل باسمك.</p>
+              <p className="text-xs text-ink-3">الأجهزة هترجع المخزن، والربح هيتلغي، والفلوس بترجع بنفس الطريقة اللي اتدفعت بيها. العملية بتتسجل باسمك.</p>
             </div>
           )}
         </Card>
       )}
+    </div>
+  );
+}
+
+function RefundLine({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="flex justify-between">
+      <dt className="text-ink-2">{label}</dt>
+      <dd>
+        <Money value={value} />
+      </dd>
     </div>
   );
 }

@@ -78,7 +78,8 @@ function serviceCategory(m: CashMovement): ServiceCategory | null {
   if (m.kind === "vf_deposit" || m.kind === "vf_withdrawal" || m.kind === "wallet_liquidation" || m.kind === "rep_payment") return "vodafone_cash";
   // Fawry commissions include the Air time bonus the agent adds on top-ups.
   if (m.kind === "topup_sale" || m.kind === "rep_load") return m.machineId === "momkn" ? "momkn" : "fawry";
-  if (m.kind === "installment_collection") return "installments";
+  // A returned installment sale takes back the markup counted on the installments it had paid.
+  if (m.kind === "installment_collection" || (m.kind === "refund" && m.commission)) return "installments";
   return null;
 }
 

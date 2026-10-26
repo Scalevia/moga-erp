@@ -42,7 +42,7 @@ export function capital(s: StoreState) {
       { label: "درج الكاش", value: drawer.value, sub: drawer.sub },
       { label: "محفظة فودافون كاش", value: walletBalance(s) },
       ...balanceIds.map((id) => ({ label: `ماكينة ${balanceLabel[id]}`, value: machineBalance(s, id) })),
-      { label: "البنك (إنستاباي)", value: bankBalance(s) },
+      { label: "البنك (إنستاباي وفيزا)", value: bankBalance(s) },
     ],
     total: 0,
   };

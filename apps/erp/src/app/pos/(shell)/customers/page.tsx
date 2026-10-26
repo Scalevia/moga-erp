@@ -162,11 +162,15 @@ export default function CustomersPage() {
                       <div className="font-medium">
                         دفع {paidCount} من {p.months}
                       </div>
-                      <div className="text-xs text-ink-3">{next ? `القسط الجاي ${num(next.amount - next.paid)} ج.م يوم ${date(next.dueDate)}` : "خلّص"}</div>
+                      <div className="text-xs text-ink-3">
+                        {p.cancelledAt ? `اتلغت ${date(p.cancelledAt)} — الجهاز رجع` : next ? `القسط الجاي ${num(next.amount - next.paid)} ج.م يوم ${date(next.dueDate)}` : "خلّص"}
+                      </div>
                     </div>
                     <div className="text-end">
                       <Money value={planRemaining(p)} className="font-semibold" />
-                      <div className="mt-0.5">{planRemaining(p) === 0 ? <Badge tone="good">خلّص</Badge> : late.count ? <Badge tone="bad">متأخر {late.days} يوم</Badge> : <Badge tone="good">منتظم</Badge>}</div>
+                      <div className="mt-0.5">
+                        {p.cancelledAt ? <Badge>اتلغت</Badge> : planRemaining(p) === 0 ? <Badge tone="good">خلّص</Badge> : late.count ? <Badge tone="bad">متأخر {late.days} يوم</Badge> : <Badge tone="good">منتظم</Badge>}
+                      </div>
                     </div>
                   </li>
                 );

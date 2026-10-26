@@ -181,6 +181,7 @@ export interface InstallmentPlan {
   months: number;
   startDate: string;
   schedule: InstallmentDue[];
+  cancelledAt?: string; // the sale was returned — nothing more to collect
 }
 
 export interface InstallmentDue {
@@ -236,6 +237,7 @@ export interface CashMovement {
   balanceId?: BalanceId;
   targetEmployeeId?: string; // whose advance / salary this is
   contactId?: string; // the supplier a payment went to
+  planId?: string; // the installment plan a collection belongs to
   category?: string; // expense category (إيجار، كهرباء…)
   // Effect on the agent account of `machineId`: + means the agent owes us balance, − means we owe the agent.
   rep?: number;

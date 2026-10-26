@@ -289,7 +289,7 @@ export const useStore = create<State>()(
           const order = get().orders.find((o) => o.id === orderId);
           if (!order || order.status === "returned") return;
           const imeis = new Set(order.items.filter((i) => i.imei).map((i) => i.imei));
-          const cashRefund = order.payments.filter((p) => p.method === "cash").reduce((a, p) => a + p.amount, 0);
+          const refund = refundFor(get(), order);
           set((st) => ({
             orders: st.orders.map((o) => (o.id === orderId ? { ...o, status: "returned" } : o)),
             units: st.units.map((u) => (imeis.has(u.imei) ? { ...u, status: "in_stock", soldOrderId: undefined } : u)),
@@ -297,8 +297,22 @@ export const useStore = create<State>()(
               const q = order.items.filter((i) => !i.imei && i.productId === p.id).reduce((a, i) => a + i.qty, 0);
               return q ? { ...p, quantity: p.quantity + q } : p;
             }),
+            // An installment sale that comes back has nothing left to collect.
+            plans: refund.plan ? st.plans.map((p) => (p.id === refund.plan!.id ? { ...p, cancelledAt: nowIso() } : p)) : st.plans,
           }));
-          if (cashRefund) movement({ kind: "refund", cash: -cashRefund, wallet: 0, topup: 0, commission: 0, description: `مرتجع فاتورة #${order.number}` });
+          // Everything the customer paid goes back the way it came in. The markup already counted as profit
+          // on collected installments is reversed; the sale's own profit drops out with the order's status.
+          if (refund.total)
+            movement({
+              kind: "refund",
+              cash: -refund.cash || 0, // `|| 0` keeps a zero from being stored as -0
+              wallet: -refund.wallet || 0,
+              bank: -refund.bank || 0,
+              topup: 0,
+              commission: -refund.markup || 0,
+              planId: refund.plan?.id,
+              description: `مرتجع فاتورة #${order.number}${refund.installments ? ` (منها أقساط اتدفعت ${refund.installments.toLocaleString("en")})` : ""}`,
+            });
         },
 
         recordMovement: movement,
@@ -494,6 +508,7 @@ export const useStore = create<State>()(
             wallet: method === "vodafone_cash" ? amount : 0,
             topup: 0,
             commission: markupProfit,
+            planId,
             description: `قسط ${customer?.name ?? ""}${markupProfit ? ` (منه ربح زيادة ${markupProfit.toLocaleString("en")})` : ""}`,
           });
         },
@@ -661,7 +676,9 @@ export function orderProfit(o: Order) {
 }
 
 export function shiftBreakdown(s: Pick<State, "orders" | "movements">, shift: Shift) {
-  const orders = s.orders.filter((o) => o.shiftId === shift.id && o.status === "completed");
+  // Every sale made in the shift brought its cash in, even if it was returned later: the return is its own
+  // "refund" movement in whichever shift it happened. Dropping returned orders here would count it twice.
+  const orders = s.orders.filter((o) => o.shiftId === shift.id);
   const cashSales = orders.flatMap((o) => o.payments).filter((p) => p.method === "cash").reduce((a, p) => a + p.amount, 0);
   const moves = s.movements.filter((m) => m.shiftId === shift.id);
   const byKind = new Map<LedgerKind, number>();
@@ -680,8 +697,15 @@ export function walletBalance(s: Pick<State, "walletOpening" | "movements" | "or
   return s.walletOpening + sales + s.movements.reduce((a, m) => a + m.wallet, 0);
 }
 
-export function bankBalance(s: Pick<State, "extraOpening" | "movements">) {
-  return s.extraOpening.bank + s.movements.reduce((a, m) => a + (m.bank ?? 0), 0);
+/** The bank account: InstaPay and card (فيزا) payments for sales land here. */
+export function bankBalance(s: Pick<State, "extraOpening" | "movements" | "orders">) {
+  // Historical demo orders are already folded into the opening balance.
+  const sales = s.orders
+    .filter((o) => !o.shiftId.startsWith("shift-hist"))
+    .flatMap((o) => o.payments)
+    .filter((p) => p.method === "instapay" || p.method === "card")
+    .reduce((a, p) => a + p.amount, 0);
+  return s.extraOpening.bank + sales + s.movements.reduce((a, m) => a + (m.bank ?? 0), 0);
 }
 
 export function machineBalance(s: Pick<State, "machineOpening" | "movements">, id: BalanceId) {
@@ -756,15 +780,51 @@ export function lentOverdueDays(l: LentOut, now = new Date()) {
 }
 
 export function planRemaining(p: InstallmentPlan) {
+  if (p.cancelledAt) return 0;
   return p.schedule.reduce((a, d) => a + d.amount - d.paid, 0);
 }
 
 export function planOverdue(p: InstallmentPlan, now = new Date()) {
-  const late = p.schedule.filter((d) => new Date(d.dueDate) < now && d.paid < d.amount);
+  const late = p.cancelledAt ? [] : p.schedule.filter((d) => new Date(d.dueDate) < now && d.paid < d.amount);
   const amount = late.reduce((a, d) => a + d.amount - d.paid, 0);
   const oldest = late[0];
   const days = oldest ? Math.floor((now.getTime() - new Date(oldest.dueDate).getTime()) / 86400000) : 0;
   return { count: late.length, amount, days };
+}
+
+/**
+ * What returning a whole order gives back to the customer, by where the money leaves from: each payment
+ * goes back the way it came in (cash → drawer, Vodafone Cash → wallet, InstaPay/card → bank). For an
+ * installment sale it also includes the installments already collected, and the markup profit counted
+ * on them, which the return reverses.
+ */
+export function refundFor(s: Pick<State, "plans" | "movements">, order: Order) {
+  const by = { cash: 0, wallet: 0, bank: 0 };
+  for (const p of order.payments) {
+    if (p.method === "cash") by.cash += p.amount;
+    else if (p.method === "vodafone_cash") by.wallet += p.amount;
+    else if (p.method === "instapay" || p.method === "card") by.bank += p.amount;
+    // "installment" is the financed part: nothing was received for it at the sale.
+  }
+  const plan = order.installmentPlanId ? s.plans.find((p) => p.id === order.installmentPlanId && !p.cancelledAt) : undefined;
+  let installments = 0;
+  let markup = 0;
+  if (plan) {
+    installments = plan.schedule.reduce((a, d) => a + d.paid, 0);
+    let traced = 0;
+    for (const m of s.movements.filter((x) => x.kind === "installment_collection" && x.planId === plan.id)) {
+      by.cash += m.cash;
+      by.wallet += m.wallet;
+      by.bank += m.bank ?? 0;
+      traced += m.cash + m.wallet + (m.bank ?? 0);
+      markup += m.commission;
+    }
+    // Collections recorded before they were linked to their plan go back as cash, with the same markup share.
+    const untraced = Math.max(0, installments - traced);
+    by.cash += untraced;
+    markup += Math.round((untraced * plan.markupPercent) / (100 + plan.markupPercent));
+  }
+  return { ...by, total: by.cash + by.wallet + by.bank, installments, markup, plan };
 }
 
 /** Advances given to an employee and not yet deducted from a salary. */
