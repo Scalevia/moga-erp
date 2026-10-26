@@ -723,8 +723,12 @@ export function repUnpaidSince(s: Pick<State, "repOpening" | "movements">, id: M
   return null;
 }
 
+const cairoDate = new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Cairo", year: "numeric", month: "2-digit", day: "2-digit" });
+
+/** Calendar days in Cairo: something from 11pm yesterday is "from yesterday" this morning, not "today". */
 export function daysSince(iso: string) {
-  return Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 86400000));
+  const day = (d: Date) => Date.parse(cairoDate.format(d));
+  return Math.max(0, Math.round((day(new Date()) - day(new Date(iso))) / 86400000));
 }
 
 export function repHistory(s: Pick<State, "movements">, id: MachineId) {

@@ -3,7 +3,7 @@
 import { CheckCircle2, HandCoins, PackageCheck } from "lucide-react";
 import { useState } from "react";
 import { Badge, Button, Card, Field, Input, Money, Segmented, cn } from "@/components/ui";
-import { balanceLabel, balancesOf, machineLabel, sinceDays } from "@/lib/format";
+import { balanceLabel, balancesOf, machineIds, machineLabel, sinceDays } from "@/lib/format";
 import { daysSince, machineBalance, repBalance, repHistory, repUnpaidSince, useStore } from "@/lib/store";
 import type { BalanceId, MachineId } from "@/lib/types";
 
@@ -14,6 +14,82 @@ import type { BalanceId, MachineId } from "@/lib/types";
 export function repStatus(balance: number) {
   if (balance < 0) return { tone: "warn" as const, text: "عليك للمندوب" };
   return { tone: "good" as const, text: "الحساب مقفول" };
+}
+
+type Store = ReturnType<typeof useStore.getState>;
+
+/**
+ * The agent loaded a machine balance on credit. The agent account moves by what we'll pay; the
+ * bonus is extra balance on the machine and counts as profit — it shows only on the owner's dashboard.
+ */
+export function recordAgentLoad(store: Store, id: MachineId, target: BalanceId, amount: number) {
+  const bonus = Math.round((amount * (store.bonusPercent[target] ?? 0)) / 100);
+  store.recordMovement({
+    kind: "rep_load",
+    cash: 0,
+    wallet: 0,
+    topup: amount + bonus,
+    commission: bonus,
+    machineId: id,
+    balanceId: target,
+    rep: -amount,
+    description: `مندوب ${machineLabel[id]} شحن ${balanceLabel[target]} ${amount.toLocaleString("en")}`,
+  });
+  return amount + bonus;
+}
+
+/** Record a load straight away: which agent, which balance, how much. Used when opening the day. */
+export function AgentLoadForm({ onRecorded }: { onRecorded: () => void }) {
+  const store = useStore();
+  const [id, setId] = useState<MachineId>(machineIds[0]);
+  const accounts = balancesOf(id);
+  const [target, setTarget] = useState<BalanceId>(accounts[0]);
+  const [amount, setAmount] = useState("");
+  const a = Number(amount) || 0;
+  const bonus = Math.round((a * (store.bonusPercent[target] ?? 0)) / 100);
+  const short = (b: BalanceId) => balanceLabel[b].replace(`${machineLabel[id]} — `, "");
+
+  return (
+    <div className="space-y-3">
+      <div>
+        <span className="mb-1 block text-sm font-medium text-ink-2">مين اللي شحن؟</span>
+        <Segmented
+          value={id}
+          onChange={(v) => {
+            setId(v);
+            setTarget(balancesOf(v)[0]);
+          }}
+          options={machineIds.map((m) => ({ value: m, label: `مندوب ${machineLabel[m]}` }))}
+        />
+      </div>
+      {accounts.length > 1 && (
+        <div>
+          <span className="mb-1 block text-sm font-medium text-ink-2">شحن أنهي حساب؟</span>
+          <Segmented value={target} onChange={setTarget} options={accounts.map((b) => ({ value: b, label: short(b) }))} />
+        </div>
+      )}
+      <Field label="شحن كام؟" hint="المبلغ اللي هتدفعه للمندوب">
+        <Input type="number" min={0} value={amount} onChange={(e) => setAmount(e.target.value)} className="num text-lg font-semibold" />
+      </Field>
+      {a > 0 && bonus > 0 && (
+        <div className="flex justify-between rounded-lg bg-surface-2 px-3 py-2 text-sm font-semibold">
+          <span>الرصيد هيزيد</span>
+          <Money value={a + bonus} />
+        </div>
+      )}
+      <Button
+        className="w-full"
+        disabled={a <= 0}
+        onClick={() => {
+          recordAgentLoad(store, id, target, a);
+          onRecorded();
+          setAmount("");
+        }}
+      >
+        تسجيل الشحنة
+      </Button>
+    </div>
+  );
 }
 
 export function AgentCard({ id, compact = false }: { id: MachineId; compact?: boolean }) {
@@ -44,20 +120,8 @@ export function AgentCard({ id, compact = false }: { id: MachineId; compact?: bo
   function submit() {
     if (!a || overpay) return;
     if (mode === "load") {
-      // The agent account moves by what we pay; the bonus is extra balance on the machine and counts as profit.
-      // It is shown only on the owner's dashboard, so the texts here leave it out.
-      store.recordMovement({
-        kind: "rep_load",
-        cash: 0,
-        wallet: 0,
-        topup: a + bonus,
-        commission: bonus,
-        machineId: id,
-        balanceId: target,
-        rep: -a,
-        description: `مندوب ${machineLabel[id]} شحن ${balanceLabel[target]} ${a.toLocaleString("en")}`,
-      });
-      setDone(`اتسجل: ${balanceLabel[target]} زاد ${(a + bonus).toLocaleString("en")}`);
+      const added = recordAgentLoad(store, id, target, a);
+      setDone(`اتسجل: ${balanceLabel[target]} زاد ${added.toLocaleString("en")}`);
     } else {
       store.recordMovement({
         kind: "rep_payment",

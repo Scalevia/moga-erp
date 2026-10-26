@@ -1,13 +1,13 @@
 "use client";
 
-import { CheckCircle2, ClipboardList, Sunrise } from "lucide-react";
+import { BellRing, CheckCircle2, ClipboardList, Plus, Sunrise } from "lucide-react";
 import { useState } from "react";
 import { Badge, Button, Card, CardHeader, Money, cn } from "@/components/ui";
 import { dayKey } from "@/lib/analytics";
-import { balanceIds, balanceLabel, dateTime, machineIds } from "@/lib/format";
-import { lastClosedShift, machineBalance, useStore, walletBalance } from "@/lib/store";
-import { AgentCard } from "./agents";
-import type { BalanceId } from "@/lib/types";
+import { balanceIds, balanceLabel, balancesOf, dateTime, machineIds, machineLabel, sinceDays, time } from "@/lib/format";
+import { daysSince, lastClosedShift, machineBalance, repBalance, repUnpaidSince, useStore, walletBalance } from "@/lib/store";
+import { AgentLoadForm } from "./agents";
+import type { BalanceId, CashMovement } from "@/lib/types";
 import { BalanceFields, CashCount, balancesFilled, emptyBalances, toCount } from "./cash-count";
 
 interface Row {
@@ -26,6 +26,26 @@ export function OpenDay() {
   const [cash, setCash] = useState("");
   const [balances, setBalances] = useState(emptyBalances);
   const [review, setReview] = useState(false);
+  // Loads recorded on this screen before the shift opens (no shift yet) — kept in the store, so a
+  // refresh still lists them and nobody records the same load twice.
+  const loads = store.movements.filter((m) => m.kind === "rep_load" && m.shiftId === "none" && (!last?.closedAt || m.createdAt > last.closedAt));
+  const [agentCame, setAgentCame] = useState<boolean | null>(() => (loads.length > 0 ? true : null));
+  const [addingLoad, setAddingLoad] = useState(false);
+  // Agents still waiting to be paid from before — e.g. a load left unpaid over a holiday. This morning's loads are listed below instead.
+  const owedAgents = machineIds
+    .map((id) => {
+      const today = loads.filter((m) => m.machineId === id).reduce((a, m) => a - (m.rep ?? 0), 0);
+      const since = repUnpaidSince(store, id);
+      return { id, owed: -repBalance(store, id) - today, days: since ? daysSince(since) : 0 };
+    })
+    .filter((a) => a.owed > 0);
+  // "Yes" needs at least one load recorded, otherwise the machine counts below won't match.
+  const agentsDone = agentCame === false || (agentCame === true && loads.length > 0);
+  const loadText = (m: CashMovement) => {
+    const id = m.machineId!;
+    const account = balancesOf(id).length > 1 && m.balanceId ? ` — ${balanceLabel[m.balanceId].replace(`${machineLabel[id]} — `, "")}` : "";
+    return `مندوب ${machineLabel[id]}${account}: ${(-(m.rep ?? 0)).toLocaleString("en")}`;
+  };
 
   const counted = Number(cash) || 0;
   const leftInDrawer = last ? (last.countedCash ?? 0) : null; // cash never leaves the drawer between shifts
@@ -69,21 +89,67 @@ export function OpenDay() {
             </div>
             <div className="space-y-4">
               <div>
-                <Step n={2} title="المناديب — حد شحن الماكينات؟" />
-                <p className="-mt-1 mb-3 text-xs text-ink-3">لو المندوب شحن الماكينة قبل ما تفتح، سجّله هنا قبل ما تكتب رصيد الماكينات.</p>
-                <div className="space-y-3">
-                  {machineIds.map((id) => (
-                    <AgentCard key={id} id={id} />
-                  ))}
-                </div>
+                <Step n={2} title="المناديب" />
+                {owedAgents.length > 0 && (
+                  <div className="mb-3 space-y-2">
+                    {owedAgents.map(({ id, owed, days }) => (
+                      <div key={id} className="flex items-start gap-2 rounded-lg border border-warn/30 bg-warn-soft px-3 py-2.5 text-sm text-warn">
+                        <BellRing size={16} className="mt-0.5 shrink-0" />
+                        <span>
+                          مندوب {machineLabel[id]} ليه <Money value={owed} className="font-bold" /> — {sinceDays(days)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <Card className="p-4">
+                  <p className="mb-3 text-sm font-medium">هل في مندوب شحن الماكينات قبل ما تفتح؟</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {([false, true] as const).map((v) => (
+                      <button
+                        key={String(v)}
+                        onClick={() => setAgentCame(v)}
+                        // Once a load is recorded the answer is "yes".
+                        disabled={!v && loads.length > 0}
+                        className={cn(
+                          "rounded-lg border py-2.5 text-sm font-medium transition disabled:opacity-40",
+                          agentCame === v ? "border-brand bg-brand-soft text-brand" : "border-border hover:bg-surface-2",
+                        )}
+                      >
+                        {v ? "أيوه" : "لأ"}
+                      </button>
+                    ))}
+                  </div>
+                  {agentCame && (
+                    <div className="mt-4 space-y-3 border-t border-border pt-4">
+                      {loads.length > 0 && (
+                        <ul className="space-y-1.5">
+                          {loads.map((m) => (
+                            <li key={m.id} className="flex items-center gap-2 rounded-lg bg-good-soft px-3 py-2 text-sm text-good">
+                              <CheckCircle2 size={15} className="shrink-0" /> اتسجل {time(m.createdAt)} — {loadText(m)}
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                      {loads.length === 0 || addingLoad ? (
+                        <AgentLoadForm onRecorded={() => setAddingLoad(false)} />
+                      ) : (
+                        <Button variant="secondary" size="sm" className="w-full" onClick={() => setAddingLoad(true)}>
+                          <Plus size={15} /> مندوب تاني شحن
+                        </Button>
+                      )}
+                    </div>
+                  )}
+                </Card>
               </div>
               <div>
                 <Step n={3} title="أرصدة المحافظ والماكينات" />
+                <p className="-mt-1 mb-3 text-xs text-ink-3">اكتب الرصيد اللي ظاهر على الماكينة دلوقتي — بعد شحنة المندوب.</p>
                 <BalanceFields value={balances} onChange={setBalances} />
               </div>
             </div>
           </div>
-          <Button size="lg" className="mt-5 w-full" disabled={cash === "" || !balancesFilled(balances)} onClick={() => setReview(true)}>
+          <Button size="lg" className="mt-5 w-full" disabled={cash === "" || !agentsDone || !balancesFilled(balances)} onClick={() => setReview(true)}>
             مراجعة وفتح الشيفت
           </Button>
         </>
