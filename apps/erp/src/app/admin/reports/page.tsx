@@ -72,7 +72,7 @@ function MonthView({ month, today, onMonth, onDay }: { month: string; today: str
     { sales: 0, profit: 0, discount: 0, invoices: 0 },
   );
   const isCurrent = month === today.slice(0, 7);
-  const net = t.profit - expenses.total;
+  const net = t.profit - expenses.total + expenses.overages;
   const stockGain = monthRevaluation(store.revaluations, month);
 
   function exportMonth() {
@@ -84,7 +84,8 @@ function MonthView({ month, today, onMonth, onDay }: { month: string; today: str
     rows.push([]);
     for (const x of expenses.operating) rows.push(["مصروف", x.category, "", "", "", "", "", -x.amount, ""]);
     rows.push(["مرتبات", "", "", "", "", "", "", -expenses.salaries, ""]);
-    if (expenses.shortages) rows.push(["عجز شيفتات", "", "", "", "", "", "", -expenses.shortages, ""]);
+    if (expenses.shortages) rows.push(["عجز في العدّ", "", "", "", "", "", "", -expenses.shortages, ""]);
+    if (expenses.overages) rows.push(["زيادة في العدّ", "", "", "", "", "", "", expenses.overages, ""]);
     rows.push(["صافي الربح", "", "", "", "", "", "", net, ""]);
     if (stockGain) rows.push([stockGain > 0 ? "مكسب غلاء البضاعة (بره صافي الربح)" : "خسارة نزول أسعار البضاعة (بره صافي الربح)", "", "", "", "", "", "", stockGain, ""]);
     download(`مبيعات-${month}.csv`, toCsv(rows));
@@ -115,7 +116,8 @@ function MonthView({ month, today, onMonth, onDay }: { month: string; today: str
             <Line key={x.category} label={`مصروف: ${x.category}`} value={-x.amount} />
           ))}
           <Line label="المرتبات" value={-expenses.salaries} />
-          {expenses.shortages > 0 && <Line label="عجز الشيفتات" value={-expenses.shortages} />}
+          {expenses.shortages > 0 && <Line label="عجز في العدّ" value={-expenses.shortages} />}
+          {expenses.overages > 0 && <Line label="زيادة في العدّ" value={expenses.overages} />}
           <div className="flex items-baseline justify-between bg-surface-2 px-4 py-3">
             <dt className="font-semibold">صافي الربح</dt>
             <dd>

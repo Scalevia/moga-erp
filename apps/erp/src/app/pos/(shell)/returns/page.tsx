@@ -17,9 +17,12 @@ export default function ReturnsPage() {
   const [reason, setReason] = useState("");
 
   const code = q.trim();
-  const order = code
-    ? orders.find((o) => String(o.number) === code.replace("#", "") || o.items.some((i) => i.imei === code))
-    : undefined;
+  // By IMEI: the phone may have been sold more than once (sold, returned or bought back, sold again) —
+  // the latest sale is the one to return.
+  const byNumber = code ? orders.find((o) => String(o.number) === code.replace("#", "")) : undefined;
+  const byImei = code && !byNumber ? orders.filter((o) => o.items.some((i) => i.imei === code)) : [];
+  const order = byNumber ?? byImei.at(-1);
+  const earlier = byImei.slice(0, -1);
   const customer = contacts.find((c) => c.id === order?.customerId);
   const refund = order?.status === "completed" ? refundFor({ plans, movements }, order) : null;
 
@@ -32,6 +35,11 @@ export default function ReturnsPage() {
       </div>
 
       {code && !order && <p className="text-center text-sm text-ink-3">مفيش فاتورة بالرقم ده</p>}
+      {earlier.length > 0 && (
+        <p className="mb-3 text-center text-xs text-ink-3">
+          ده آخر بيعة للجهاز. اتباع قبل كده في: {earlier.map((o) => `#${o.number}${o.status === "returned" ? " (مرتجعة)" : ""}`).join("، ")}
+        </p>
+      )}
 
       {order && (
         <Card>

@@ -3,6 +3,7 @@
 import { Camera, CheckCircle2, ShieldAlert } from "lucide-react";
 import { useState } from "react";
 import { Button, Card, CardHeader, Field, Input, Money, PageHeader, Segmented, Textarea } from "@/components/ui";
+import { date } from "@/lib/format";
 import { useStore } from "@/lib/store";
 import type { UsedInspection } from "@/lib/types";
 
@@ -18,13 +19,19 @@ const empty = {
 export default function UsedPhonePage() {
   const buyUsedPhone = useStore((s) => s.buyUsedPhone);
   const units = useStore((s) => s.units);
+  const orders = useStore((s) => s.orders);
+  const contacts = useStore((s) => s.contacts);
   const [f, setF] = useState(empty);
   const [insp, setInsp] = useState<UsedInspection>({ batteryHealth: 85, screen: "excellent", body: "good", hasBox: false, hasCharger: false, notes: "" });
   const [done, setDone] = useState(false);
 
-  const imeiKnown = f.imei.length >= 15 && units.some((u) => u.imei === f.imei);
+  // A phone on the shelf can't be bought again; one the shop sold before can — it comes back as used.
+  const known = f.imei.length === 15 ? units.find((u) => u.imei === f.imei) : undefined;
+  const onShelf = known?.status === "in_stock";
+  const lastSale = known?.soldOrderId ? orders.find((o) => o.id === known.soldOrderId) : undefined;
+  const boughtBy = contacts.find((c) => c.id === lastSale?.customerId)?.name;
   const valid =
-    f.productName && f.imei.length === 15 && !imeiKnown && Number(f.price) > 0 && Number(f.retailPrice) > Number(f.price) &&
+    f.productName && f.imei.length === 15 && !onShelf && Number(f.price) > 0 && Number(f.retailPrice) > Number(f.price) &&
     f.seller.name && f.seller.phone && f.seller.nationalId.length === 14;
 
   if (done) {
@@ -53,7 +60,21 @@ export default function UsedPhonePage() {
             <Field label="الماركة">
               <Input value={f.brand} onChange={(e) => setF({ ...f, brand: e.target.value })} placeholder="Apple" />
             </Field>
-            <Field label="IMEI" hint={imeiKnown ? <span className="text-bad">الـ IMEI ده عدّى علينا قبل كده — راجع سجله</span> : "اطلب *#06# من الجهاز"}>
+            <Field
+              label="IMEI"
+              hint={
+                onShelf ? (
+                  <span className="text-bad">الجهاز ده موجود في المخزن دلوقتي — مينفعش يتشرى تاني</span>
+                ) : known ? (
+                  <span className="text-brand">
+                    الجهاز ده اتباع من المحل{lastSale && ` يوم ${date(lastSale.createdAt)}`}
+                    {boughtBy && ` لـ ${boughtBy}`} — هيرجع المخزن كمستعمل
+                  </span>
+                ) : (
+                  "اطلب *#06# من الجهاز"
+                )
+              }
+            >
               <Input value={f.imei} maxLength={15} onChange={(e) => setF({ ...f, imei: e.target.value.replace(/\D/g, "") })} className="num" />
             </Field>
             <Field label="سعر الشراء">

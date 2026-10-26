@@ -261,10 +261,8 @@ export function buildInitData(d: SetupDraft, ownerId: string): InitData {
     }
     const remaining = n(x.remaining);
     const months = Math.max(1, Math.ceil(remaining / n(x.monthly)));
-    // Schedule starts one month before the next due date, so installment 1 lands on it.
-    const start = new Date(x.nextDue);
-    start.setMonth(start.getMonth() - 1);
-    // Existing plans: the markup was agreed before the system, so the remaining amount is taken as-is.
+    // Existing plans: the markup was agreed before the system, so the remaining amount is taken as-is,
+    // in the agreed monthly installments starting on the next due date.
     return {
       id: `plan-${x.key}`,
       orderId: "",
@@ -275,7 +273,7 @@ export function buildInitData(d: SetupDraft, ownerId: string): InitData {
       markupPercent: 0,
       months,
       startDate: now,
-      schedule: buildSchedule(remaining, months, start),
+      schedule: buildSchedule(remaining, months, new Date(x.nextDue), n(x.monthly), 0),
     };
   });
 

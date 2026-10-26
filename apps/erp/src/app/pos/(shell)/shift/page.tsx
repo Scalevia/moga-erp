@@ -97,8 +97,9 @@ function ShiftResult({ shift }: { shift: Shift }) {
   const count = shift.closingCount!;
   const cards = [
     { label: "النقدية", counted: shift.countedCash!, expected: shift.expectedCash! },
-    { label: "فودافون كاش", counted: count.wallet, expected: walletBalance(store) },
-    ...balanceIds.map((id) => ({ label: balanceLabel[id], counted: count.machines[id], expected: machineBalance(store, id) })),
+    // Compared with what was expected at closing — the balances themselves now follow the count.
+    { label: "فودافون كاش", counted: count.wallet, expected: shift.closingExpected?.wallet ?? walletBalance(store) },
+    ...balanceIds.map((id) => ({ label: balanceLabel[id], counted: count.machines[id], expected: shift.closingExpected?.machines[id] ?? machineBalance(store, id) })),
   ];
 
   return (

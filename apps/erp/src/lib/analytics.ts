@@ -1,6 +1,7 @@
 // Aggregations for the owner dashboard. These become SQL views/RPCs later.
 
-import { orderProfit, orderTotal } from "./store";
+import { closingDiffs, openingDiffs } from "./shifts";
+import { orderProfit, orderTotal, unitPrice } from "./store";
 import type { CashMovement, ItemCategory, LentOut, Order, PayrollEntry, PhoneUnit, Product, Revaluation, Shift } from "./types";
 
 // Service commissions and machine bonuses are profit with no revenue line of their own.
@@ -141,11 +142,11 @@ export function inventoryValue(products: Product[], units: PhoneUnit[]) {
     const p = byId.get(u.productId);
     if (!p) continue;
     cost += u.cost;
-    retail += p.retailPrice;
+    retail += unitPrice(u, p);
     const r = rows.get(p.id) ?? { product: p, count: 0, cost: 0, retail: 0 };
     r.count++;
     r.cost += u.cost;
-    r.retail += p.retailPrice;
+    r.retail += unitPrice(u, p);
     rows.set(p.id, r);
   }
   for (const p of products) {
@@ -280,13 +281,27 @@ export interface Expenses {
   operating: { category: string; amount: number }[]; // rent, electricity… largest first
   operatingTotal: number;
   salaries: number;
-  shortages: number;
+  shortages: number; // money found missing when counting (drawer, wallet, machines)
   total: number;
+  overages: number; // money found extra when counting — added to the net profit
+}
+
+/** What the month's counts found missing or extra, at every shift opening and closing. */
+function countDifferences(shifts: Shift[], inRange: (iso: string) => boolean) {
+  const diffs = shifts.flatMap((s) => [
+    ...(inRange(s.openedAt) ? openingDiffs(s) : []),
+    ...(s.closedAt && inRange(s.closedAt) ? closingDiffs(s) : []),
+  ]);
+  return {
+    shortages: diffs.filter((d) => d.diff < 0).reduce((a, d) => a - d.diff, 0),
+    overages: diffs.filter((d) => d.diff > 0).reduce((a, d) => a + d.diff, 0),
+  };
 }
 
 /**
  * What the month cost the shop, up to `uptoDay`:
- * operating expenses + salaries (counted in the month they're for, once paid) + shift cash shortages.
+ * operating expenses + salaries (counted in the month they're for, once paid) + money found missing at
+ * shift counts. Money found extra at counts comes back as `overages`, added to the net profit.
  * Not expenses: refunds (the sale's profit is already reversed), advances (deducted from salary),
  * asset purchases, loan repayments and owner drawings.
  */
@@ -308,10 +323,8 @@ export function monthExpenses(
   const operating = [...byCat].map(([category, amount]) => ({ category, amount })).sort((a, b) => b.amount - a.amount);
   const operatingTotal = operating.reduce((a, x) => a + x.amount, 0);
   const salaries = s.payroll.filter((p) => p.month === month).reduce((a, p) => a + p.salary, 0);
-  const shortages = s.shifts
-    .filter((x) => x.closedAt && inRange(x.closedAt))
-    .reduce((a, x) => a + Math.max(0, (x.expectedCash ?? 0) - (x.countedCash ?? 0)), 0);
-  return { operating, operatingTotal, salaries, shortages, total: operatingTotal + salaries + shortages };
+  const { shortages, overages } = countDifferences(s.shifts, inRange);
+  return { operating, operatingTotal, salaries, shortages, total: operatingTotal + salaries + shortages, overages };
 }
 
 /**

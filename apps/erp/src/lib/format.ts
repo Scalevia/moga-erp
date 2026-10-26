@@ -118,4 +118,5 @@ export const ledgerLabel: Record<LedgerKind, string> = {
   refund: "رد فلوس مرتجع",
   lent_repaid: "استرداد سلفة",
   installment_collection: "تحصيل قسط",
+  count_adjustment: "فرق عدّ",
 };

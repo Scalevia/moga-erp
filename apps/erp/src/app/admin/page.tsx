@@ -16,7 +16,7 @@ const serviceLabel: Record<ServiceCategory, string> = {
 };
 import { balanceIds, balanceLabel, categoryLabel, dateTime, machineIds, machineLabel, pct, sinceDays } from "@/lib/format";
 import { drawerCash } from "@/lib/capital";
-import { describeDiffs, openingDiffs } from "@/lib/shifts";
+import { closingDiffs, describeDiffs, openingDiffs } from "@/lib/shifts";
 import { daysSince, lentOverdueDays, lentRemaining, machineBalance, planOverdue, repBalance, repUnpaidSince, useStore, walletBalance } from "@/lib/store";
 
 export default function Dashboard() {
@@ -32,13 +32,19 @@ export default function Dashboard() {
   const today = todayStats(store.orders, store.movements);
   const cats = profitByCategory(store.orders, store.movements, curr.key);
   const expenses = monthExpenses(store, curr.key, dayOfMonth);
-  const net = curr.profit - expenses.total;
-  const prevNet = prev.profit - monthExpenses(store, prev.key).total;
+  const net = curr.profit - expenses.total + expenses.overages;
+  const prevExpenses = monthExpenses(store, prev.key);
+  const prevNet = prev.profit - prevExpenses.total + prevExpenses.overages;
   const stockGain = monthRevaluation(store.revaluations, curr.key, dayOfMonth);
 
   const overdue = store.plans.map((p) => ({ p, o: planOverdue(p) })).filter((x) => x.o.count > 0);
   const lowStock = store.products.filter((p) => p.tracking === "quantity" && p.quantity <= 10);
-  const shortages = store.shifts.filter((s) => s.closedAt && (s.countedCash ?? 0) < (s.expectedCash ?? 0));
+  // Differences found when a shift was closed (last 7 days), per shift — missing or extra.
+  const closingIssues = store.shifts
+    .filter((s) => s.closedAt && s.closedAt >= new Date(now - 7 * 86400000).toISOString())
+    .map((s) => ({ s, diffs: closingDiffs(s) }))
+    .filter((x) => x.diffs.length > 0)
+    .reverse();
   const owedReps = machineIds.filter((id) => repBalance(store, id) < 0);
   const lateLent = store.lentOut.filter((l) => lentOverdueDays(l) > 0);
   // Gaps found when someone opened a shift (last 7 days): money missing between two counts.
@@ -124,9 +130,23 @@ export default function Dashboard() {
           </div>
           {expenses.shortages > 0 && (
             <div className="flex justify-between px-4 py-2.5">
-              <dt>عجز الشيفتات</dt>
+              <dt>
+                عجز في العدّ
+                <span className="block text-xs text-ink-3">الدرج والمحفظة والماكينات — في استلام وتقفيل الشيفتات</span>
+              </dt>
               <dd className="text-bad">
                 − <Money value={expenses.shortages} />
+              </dd>
+            </div>
+          )}
+          {expenses.overages > 0 && (
+            <div className="flex justify-between px-4 py-2.5">
+              <dt>
+                زيادة في العدّ
+                <span className="block text-xs text-ink-3">فلوس طلعت زيادة عن المتوقع — راجع سببها</span>
+              </dt>
+              <dd className="text-good">
+                + <Money value={expenses.overages} />
               </dd>
             </div>
           )}
@@ -143,7 +163,7 @@ export default function Dashboard() {
         </p>
       </Card>
 
-      {(overdue.length > 0 || lowStock.length > 0 || shortages.length > 0 || owedReps.length > 0 || lateLent.length > 0 || openingIssues.length > 0 || lossSales.length > 0) && (
+      {(overdue.length > 0 || lowStock.length > 0 || closingIssues.length > 0 || owedReps.length > 0 || lateLent.length > 0 || openingIssues.length > 0 || lossSales.length > 0) && (
         <Card>
           <CardHeader title="محتاج انتباهك" />
           <ul className="divide-y divide-border text-sm">
@@ -180,13 +200,19 @@ export default function Dashboard() {
                 </li>
               );
             })}
-            {shortages.slice(-2).map((s) => (
-              <li key={s.id} className="flex items-center gap-3 px-4 py-3">
-                <AlertTriangle size={16} className="text-bad" />
-                <span className="flex-1">عجز في تقفيل شيفت {staffName(s.employeeId)}</span>
-                <Money value={(s.expectedCash ?? 0) - (s.countedCash ?? 0)} className="font-semibold text-bad" />
-              </li>
-            ))}
+            {closingIssues.map(({ s, diffs }) => {
+              const missing = diffs.some((d) => d.diff < 0);
+              return (
+                <li key={`close-${s.id}`} className="flex items-start gap-3 px-4 py-3">
+                  <AlertTriangle size={16} className={cn("mt-0.5 shrink-0", missing ? "text-bad" : "text-warn")} />
+                  <span className="flex-1">
+                    فرق في تقفيل شيفت {staffName(s.employeeId)}
+                    <span className={cn("block text-xs", missing ? "text-bad" : "text-warn")}>{describeDiffs(diffs)}</span>
+                    <span className="block text-xs text-ink-3">{dateTime(s.closedAt!)}</span>
+                  </span>
+                </li>
+              );
+            })}
             {owedReps.map((id) => (
               <li key={id} className="flex items-center gap-3 px-4 py-3">
                 <HandCoins size={16} className="text-warn" />

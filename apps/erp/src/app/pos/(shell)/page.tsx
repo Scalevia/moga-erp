@@ -6,7 +6,7 @@ import { CheckoutModal } from "@/components/pos/checkout";
 import { ReceiptModal } from "@/components/pos/receipt";
 import { Badge, Button, Card, Field, Input, Modal, Money, Textarea, cn } from "@/components/ui";
 import { OTHER_SERVICE_ID, categoryLabel, itemCategoryLabel } from "@/lib/format";
-import { useStore } from "@/lib/store";
+import { unitPrice, useStore } from "@/lib/store";
 import type { Order, OrderItem, PhoneUnit, Product } from "@/lib/types";
 
 type CartLine = OrderItem & { key: string; available: number };
@@ -53,11 +53,14 @@ export default function SalePage() {
     const p = products.find((x) => x.id === unit.productId)!;
     setCart((c) => [
       ...c,
-      { key: unit.imei, productId: p.id, name: p.name, category: p.category, imei: unit.imei, qty: 1, listPrice: p.retailPrice, unitPrice: p.retailPrice, unitCost: unit.cost, available: 1 },
+      { key: unit.imei, productId: p.id, name: p.name, category: p.category, imei: unit.imei, qty: 1, listPrice: unitPrice(unit, p), unitPrice: unitPrice(unit, p), unitCost: unit.cost, available: 1 },
     ]);
   }
 
   function addQuantity(p: Product) {
+    // No selling below zero: stock that arrived has to be received first.
+    const inCartQty = cart.find((l) => l.productId === p.id && !l.imei)?.qty ?? 0;
+    if (inCartQty >= p.quantity) return notify(outOfStock(p.quantity));
     setCart((c) => {
       const existing = c.find((l) => l.productId === p.id && !l.imei);
       if (existing) return c.map((l) => (l === existing ? { ...l, qty: l.qty + 1 } : l));
@@ -99,6 +102,9 @@ export default function SalePage() {
   const lossLines = cart.filter((l) => l.unitPrice < l.unitCost);
   const profit = cart.reduce((a, l) => a + l.qty * (l.unitPrice - l.unitCost), 0);
   const hasPhone = cart.some((l) => l.imei);
+  // Quantity items are checked against the stock right now, not when they were added.
+  const availableOf = (l: CartLine) => (l.imei || l.category === "service" ? l.available : (products.find((p) => p.id === l.productId)?.quantity ?? 0));
+  const overStock = cart.some((l) => l.qty > availableOf(l));
   const customerMissing = hasPhone && (!customer.name || !customer.phone);
 
   function reset() {
@@ -199,7 +205,8 @@ export default function SalePage() {
                 const list = l.listPrice ?? l.unitPrice;
                 const lineDiscount = list - l.unitPrice;
                 const setPrice = (price: number) => setCart((c) => c.map((x) => (x === l ? { ...x, unitPrice: price } : x)));
-                const overStock = l.qty > l.available;
+                const available = availableOf(l);
+                const lineOverStock = l.qty > available;
                 const atLoss = l.unitPrice < l.unitCost; // below what the item cost us
                 const isService = l.category === "service";
                 return (
@@ -229,7 +236,7 @@ export default function SalePage() {
                             <AlertTriangle size={11} /> البيعة دي بخسارة — خلي بالك
                           </Badge>
                         )}
-                        {overStock && <Badge tone="warn">المتاح {l.available} بس</Badge>}
+                        {lineOverStock && <Badge tone="bad">المتاح {available} بس</Badge>}
                         {isAdmin && <span>ربح {Math.round((l.unitPrice - l.unitCost) * l.qty)}</span>}
                       </div>
                     </div>
@@ -239,7 +246,11 @@ export default function SalePage() {
                           <Minus size={14} />
                         </button>
                         <span className="num w-6 text-center font-semibold">{l.qty}</span>
-                        <button className="p-2 text-ink-3 hover:text-ink" onClick={() => setCart((c) => c.map((x) => (x === l ? { ...x, qty: x.qty + 1 } : x)))}>
+                        <button
+                          className="p-2 text-ink-3 hover:text-ink disabled:opacity-30"
+                          disabled={l.qty >= available}
+                          onClick={() => setCart((c) => c.map((x) => (x === l ? { ...x, qty: x.qty + 1 } : x)))}
+                        >
                           <Plus size={14} />
                         </button>
                       </div>
@@ -334,10 +345,11 @@ export default function SalePage() {
               </span>
             </div>
           )}
-          <Button size="lg" className="mt-4 w-full" disabled={!cart.length || customerMissing} onClick={() => setCheckoutOpen(true)}>
+          <Button size="lg" className="mt-4 w-full" disabled={!cart.length || customerMissing || overStock} onClick={() => setCheckoutOpen(true)}>
             الدفع
           </Button>
           {customerMissing && <p className="mt-2 text-center text-xs text-warn">اكتب اسم وتليفون الزبون قبل بيع الموبايل</p>}
+          {overStock && <p className="mt-2 text-center text-xs text-bad">فيه صنف كميته أكتر من الموجود في المخزن — قلّل الكمية، ولو البضاعة جت سجّلها في استلام بضاعة الأول</p>}
         </Card>
       </div>
 
@@ -467,7 +479,10 @@ function ImeiPicker({ product, units, onPick, onClose }: { product: Product; uni
             <li key={u.imei}>
               <button onClick={() => onPick(u)} className="flex w-full items-center justify-between px-5 py-3 hover:bg-surface-2">
                 <span className="num text-sm">{u.imei}</span>
-                {u.inspection && <Badge tone="neutral">بطارية {u.inspection.batteryHealth}%</Badge>}
+                <span className="flex items-center gap-2">
+                  {u.inspection && <Badge tone="neutral">بطارية {u.inspection.batteryHealth}%</Badge>}
+                  <Money value={unitPrice(u, product)} className="text-sm font-semibold" />
+                </span>
               </button>
             </li>
           ))}
@@ -477,3 +492,6 @@ function ImeiPicker({ product, units, onPick, onClose }: { product: Product; uni
     </div>
   );
 }
+
+const outOfStock = (qty: number) =>
+  qty > 0 ? `المتاح ${qty} بس — لو جالك بضاعة سجّلها في استلام بضاعة الأول` : "المنتج ده خلصان من المخزن — لو جالك بضاعة سجّلها في استلام بضاعة الأول";

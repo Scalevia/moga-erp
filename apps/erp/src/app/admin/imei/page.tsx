@@ -4,7 +4,7 @@ import { PackageCheck, ScanSearch, ShoppingBag, Truck } from "lucide-react";
 import { useState } from "react";
 import { Badge, Card, Input, Money } from "@/components/ui";
 import { dateTime } from "@/lib/format";
-import { useStore } from "@/lib/store";
+import { unitPrice, useStore } from "@/lib/store";
 
 const screenLabel = { excellent: "ممتازة", scratches: "خدوش", cracked: "مكسورة" };
 
@@ -55,6 +55,22 @@ export default function ImeiLookup() {
 
           <Card className="p-4">
             <ol className="relative space-y-6 border-s-2 border-border ps-6">
+              {(unit.pastOrderIds ?? []).map((id) => {
+                const past = orders.find((o) => o.id === id);
+                if (!past) return null;
+                const buyer = contacts.find((c) => c.id === past.customerId);
+                const pastLine = past.items.find((i) => i.imei === unit.imei);
+                return (
+                  <Step key={id} icon={<ShoppingBag size={14} />} title={`اتباع قبل كده — فاتورة #${past.number}`} when={dateTime(past.createdAt)}>
+                    <div>العميل: {buyer ? buyer.name : "بدون بيانات"}</div>
+                    {pastLine && (
+                      <div>
+                        {pastLine.name} · <Money value={pastLine.unitPrice} />
+                      </div>
+                    )}
+                  </Step>
+                );
+              })}
               <Step icon={<Truck size={14} />} title={unit.condition === "used" ? "اتشرى مستعمل" : "اتشرى من مورد"} when={dateTime(unit.purchasedAt)}>
                 {supplier ? `${supplier.name}${supplier.nationalId ? ` · بطاقة ${supplier.nationalId}` : ""}` : "—"}
                 <div>
@@ -63,7 +79,7 @@ export default function ImeiLookup() {
               </Step>
               {unit.status === "in_stock" && (
                 <Step icon={<PackageCheck size={14} />} title="في المخزن دلوقتي" when="">
-                  سعر البيع المعروض <Money value={product.retailPrice} />
+                  سعر البيع المعروض <Money value={unitPrice(unit, product)} />
                 </Step>
               )}
               {order && line && (

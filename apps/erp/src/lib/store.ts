@@ -49,7 +49,7 @@ import type {
   ShopService,
   UsedInspection,
 } from "./types";
-import { defaultServices } from "./format";
+import { balanceIds, balanceLabel, defaultServices } from "./format";
 
 const uid = (p: string) => `${p}-${Math.random().toString(36).slice(2, 9)}`;
 const nowIso = () => new Date().toISOString();
@@ -204,11 +204,19 @@ function initialState() {
   };
 }
 
-export function buildSchedule(financed: number, months: number, start: Date) {
-  const each = Math.round(financed / months);
+/**
+ * Monthly due dates on the same day of the month as `start`, the first one `firstMonth` months after it
+ * (0 = on `start` itself). In a shorter month the installment falls on its last day: a sale on Jan 31 is
+ * due Feb 28, Mar 31, Apr 30… Equal installments, or `each` when the agreed monthly amount is known —
+ * the last one takes what's left either way.
+ */
+export function buildSchedule(financed: number, months: number, start: Date, each = Math.round(financed / months), firstMonth = 1) {
   return Array.from({ length: months }, (_, i) => {
     const due = new Date(start);
-    due.setMonth(due.getMonth() + i + 1);
+    due.setDate(1);
+    due.setMonth(start.getMonth() + i + firstMonth);
+    const lastDay = new Date(due.getFullYear(), due.getMonth() + 1, 0).getDate();
+    due.setDate(Math.min(start.getDate(), lastDay));
     return {
       n: i + 1,
       dueDate: due.toISOString(),
@@ -237,6 +245,17 @@ export const useStore = create<State>()(
             { ...m, id: uid("mv"), createdAt: nowIso(), shiftId: shift?.id ?? "none", employeeId: s.currentEmployeeId ?? "unknown" },
           ],
         }));
+      };
+
+      // A count that differs from the system sets the wallet and machine balances to what was counted, so the
+      // difference is taken once (in the net profit, from the shift's counts) and not again at the next count.
+      const adjustToCount = (count: BalanceCount, expected: { wallet: number; machines: Record<BalanceId, number> }, when: string) => {
+        const wallet = count.wallet - expected.wallet;
+        if (wallet) movement({ kind: "count_adjustment", cash: 0, wallet, topup: 0, commission: 0, description: `فرق عدّ فودافون كاش ${when}` });
+        for (const id of balanceIds) {
+          const diff = count.machines[id] - expected.machines[id];
+          if (diff) movement({ kind: "count_adjustment", cash: 0, wallet: 0, topup: diff, balanceId: id, commission: 0, description: `فرق عدّ ${balanceLabel[id]} ${when}` });
+        }
       };
 
       return {
@@ -318,14 +337,21 @@ export const useStore = create<State>()(
         recordMovement: movement,
 
         buyUsedPhone: ({ productName, brand, imei, price, retailPrice, seller, inspection }) => {
+          const known = get().units.find((u) => u.imei === imei);
+          if (known?.status === "in_stock") return; // already on the shelf — can't be bought twice
           const sellerId = upsertContact("customer", seller);
           let product = get().products.find((p) => p.name === productName && p.category === "used_phone");
           if (!product) {
             product = { id: uid("p"), name: productName, brand, category: "used_phone", tracking: "imei", retailPrice, avgCost: 0, quantity: 0 };
             set((st) => ({ products: [...st.products, product!] }));
           }
+          const unit: PhoneUnit = { imei, productId: product.id, condition: "used", cost: price, status: "in_stock", supplierId: sellerId, purchasedAt: nowIso(), inspection, retailPrice };
+          // A phone the shop sold before (e.g. new) and is buying back: same IMEI, so the record comes back to
+          // stock as a used phone, keeping its earlier sales as history.
           set((st) => ({
-            units: [...st.units, { imei, productId: product!.id, condition: "used", cost: price, status: "in_stock", supplierId: sellerId, purchasedAt: nowIso(), inspection }],
+            units: known
+              ? st.units.map((u) => (u.imei === imei ? { ...unit, pastOrderIds: [...(u.pastOrderIds ?? []), ...(u.soldOrderId ? [u.soldOrderId] : [])] } : u))
+              : [...st.units, unit],
           }));
           movement({ kind: "used_phone_purchase", cash: -price, wallet: 0, topup: 0, commission: 0, description: `${productName} من ${seller.name}` });
         },
@@ -453,7 +479,11 @@ export const useStore = create<State>()(
           const s = get();
           const product = s.products.find((p) => p.id === productId);
           if (!product) return;
-          set((st) => ({ products: st.products.map((p) => (p.id === productId ? { ...p, retailPrice } : p)) }));
+          set((st) => ({
+            products: st.products.map((p) => (p.id === productId ? { ...p, retailPrice } : p)),
+            // Pieces with their own price (used phones) take the model's new price too.
+            units: st.units.map((u) => (u.productId === productId && u.status === "in_stock" && u.retailPrice !== undefined ? { ...u, retailPrice } : u)),
+          }));
           if (unitCost === undefined) return;
 
           const pieces = product.tracking === "imei" ? s.units.filter((u) => u.productId === productId && u.status === "in_stock") : [];
@@ -607,6 +637,7 @@ export const useStore = create<State>()(
         },
 
         openShift: ({ float, count, expected }) => {
+          // (cash needs no adjustment: the shift's drawer starts from the counted float)
           set((st) => ({
             shifts: [
               ...st.shifts,
@@ -621,13 +652,20 @@ export const useStore = create<State>()(
               },
             ],
           }));
+          adjustToCount(count, expected, "عند استلام الشيفت");
         },
 
         closeShift: ({ counted, count }) => {
           const shift = openShift()!;
-          const expected = expectedCash(get(), shift);
-          const closed = { ...shift, closedAt: nowIso(), countedCash: counted, expectedCash: expected, closingCount: count };
-          set((st) => ({ shifts: st.shifts.map((s) => (s.id === shift.id ? closed : s)) }));
+          const s = get();
+          const expected = expectedCash(s, shift);
+          const closingExpected: BalanceCount = {
+            wallet: walletBalance(s),
+            machines: Object.fromEntries(balanceIds.map((id) => [id, machineBalance(s, id)])) as Record<BalanceId, number>,
+          };
+          adjustToCount(count, closingExpected, "عند تقفيل الشيفت"); // while the shift is still open, so it's recorded in it
+          const closed = { ...shift, closedAt: nowIso(), countedCash: counted, expectedCash: expected, closingCount: count, closingExpected };
+          set((st) => ({ shifts: st.shifts.map((x) => (x.id === shift.id ? closed : x)) }));
           return closed;
         },
 
@@ -661,6 +699,11 @@ export const useStore = create<State>()(
 
 export function currentShift(s: Pick<State, "shifts">) {
   return s.shifts.find((x) => !x.closedAt);
+}
+
+/** A phone's selling price: its own (used phones), or its model's. */
+export function unitPrice(u: PhoneUnit, p: Product) {
+  return u.retailPrice ?? p.retailPrice;
 }
 
 export function orderTotal(o: Order) {

@@ -112,6 +112,8 @@ export interface PhoneUnit {
   purchasedAt: string;
   inspection?: UsedInspection;
   soldOrderId?: string;
+  retailPrice?: number; // used phones: each piece has its own price; otherwise the model's price
+  pastOrderIds?: string[]; // earlier sales of this same phone, when the shop bought it back
 }
 
 export interface UsedInspection {
@@ -213,7 +215,8 @@ export type LedgerKind =
   | "salary_payment"
   | "refund"
   | "lent_repaid"
-  | "installment_collection";
+  | "installment_collection"
+  | "count_adjustment"; // wallet/machine balance set to what was counted at opening or closing
 
 /** Service companies whose machines are topped up by an agent (مندوب). One agent account per company. */
 export type MachineId = "fawry" | "momkn";
@@ -265,6 +268,7 @@ export interface Shift {
   countedCash?: number;
   expectedCash?: number;
   closingCount?: BalanceCount;
+  closingExpected?: BalanceCount; // what the wallet and machines should have shown at closing
 }
 
 /** One settlement on a debt: a repayment, or the creditor forgiving (part of) it. */
