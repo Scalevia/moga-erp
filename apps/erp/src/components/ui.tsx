@@ -86,7 +86,13 @@ export const inputClass =
   "h-10 w-full rounded-lg border border-border bg-surface px-3 text-sm outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/20 placeholder:text-ink-3";
 
 export function Input({ className, ...props }: ComponentProps<"input">) {
-  return <input className={cn(inputClass, className)} {...props} />;
+  return <input className={cn(inputClass, className)} inputMode={numberKeypad(props)} {...props} />;
+}
+
+/** Number fields open the phone's number pad (with a decimal point when the field takes fractions). */
+export function numberKeypad(props: { type?: string; step?: number | string; inputMode?: ComponentProps<"input">["inputMode"] }) {
+  if (props.inputMode || props.type !== "number") return props.inputMode;
+  return props.step !== undefined && String(props.step).includes(".") ? "decimal" : "numeric";
 }
 
 export function Select({ className, ...props }: ComponentProps<"select">) {

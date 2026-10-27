@@ -260,7 +260,7 @@ export default function FinancePage() {
                 <>
                   <PersonField label="اسمه" value={borrower} onChange={setBorrower} placeholder="مثال: محمود البقال" />
                   <Field label="تليفونه">
-                    <Input value={borrower.phone} onChange={(e) => setBorrower({ ...borrower, phone: e.target.value })} className="num" />
+                    <Input type="tel" inputMode="tel" autoComplete="off" value={borrower.phone} onChange={(e) => setBorrower({ ...borrower, phone: e.target.value })} className="num" />
                   </Field>
                   <Field label="هيرجّعها إمتى؟">
                     <Input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
@@ -294,7 +294,7 @@ export default function FinancePage() {
                 <>
                   <PersonField label="اسم المُقرض" value={lender} onChange={setLender} />
                   <Field label="تليفونه">
-                    <Input value={lender.phone} onChange={(e) => setLender({ ...lender, phone: e.target.value })} className="num" />
+                    <Input type="tel" inputMode="tel" autoComplete="off" value={lender.phone} onChange={(e) => setLender({ ...lender, phone: e.target.value })} className="num" />
                   </Field>
                 </>
               )}

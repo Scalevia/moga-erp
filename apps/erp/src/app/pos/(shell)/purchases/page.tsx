@@ -440,7 +440,7 @@ function NewSupplierModal({ initialName, onClose, onCreated }: { initialName: st
           <Input autoFocus value={name} onChange={(e) => setName(e.target.value)} />
         </Field>
         <Field label="التليفون">
-          <Input value={phone} onChange={(e) => setPhone(e.target.value)} className="num" placeholder="01xxxxxxxxx" />
+          <Input type="tel" inputMode="tel" autoComplete="off" value={phone} onChange={(e) => setPhone(e.target.value)} className="num" placeholder="01xxxxxxxxx" />
         </Field>
         <Button className="w-full" disabled={!name.trim() || !phone.trim()} onClick={() => onCreated(addSupplier({ name: name.trim(), phone: phone.trim() }))}>
           إضافة المورد

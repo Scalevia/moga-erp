@@ -20,7 +20,7 @@ export default function Home() {
           >
             <MonitorSmartphone className="mb-4 text-brand" size={32} />
             <h2 className="text-xl font-semibold">نقطة البيع</h2>
-            <p className="mt-1 text-sm text-ink-3">لابتوب المحل — بيع، مشتريات، أقساط، تقفيل الشيفت</p>
+            <p className="mt-1 text-sm text-ink-3">بيع، مشتريات، أقساط، تقفيل الشيفت</p>
           </Link>
           <Link
             href="/admin"
@@ -28,7 +28,7 @@ export default function Home() {
           >
             <LayoutDashboard className="mb-4 text-brand" size={32} />
             <h2 className="text-xl font-semibold">لوحة المالك</h2>
-            <p className="mt-1 text-sm text-ink-3">موبايل الأيفون — أرباح، مخزون، فلوس، موظفين</p>
+            <p className="mt-1 text-sm text-ink-3">أرباح، مخزون، فلوس، موظفين</p>
           </Link>
         </div>
         <SetupCard />

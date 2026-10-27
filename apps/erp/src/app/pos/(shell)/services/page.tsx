@@ -85,7 +85,7 @@ export default function ServicesPage() {
           </Field>
           {kind !== "wallet_liquidation" && (
             <Field label="رقم الزبون">
-              <Input value={phone} onChange={(e) => setPhone(e.target.value)} className="num" />
+              <Input type="tel" inputMode="tel" autoComplete="off" value={phone} onChange={(e) => setPhone(e.target.value)} className="num" />
             </Field>
           )}
         </div>

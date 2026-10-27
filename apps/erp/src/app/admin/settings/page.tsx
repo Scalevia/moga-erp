@@ -76,7 +76,7 @@ export default function SettingsPage() {
             <Input value={f.address} onChange={set("address")} />
           </Field>
           <Field label="التليفون">
-            <Input value={f.phone} onChange={set("phone")} className="num" />
+            <Input type="tel" inputMode="tel" autoComplete="off" value={f.phone} onChange={set("phone")} className="num" />
           </Field>
           <Field label="شروط الضمان" hint="بتتطبع في آخر الفاتورة">
             <Textarea rows={3} value={f.warranty} onChange={set("warranty")} />
@@ -135,6 +135,8 @@ export default function SettingsPage() {
           {machineIds.map((id) => (
             <Field key={id} label={`مندوب ${machineLabel[id]}`}>
               <Input
+                type="tel"
+                inputMode="tel"
                 value={agentPhones[id] ?? ""}
                 onChange={(e) => {
                   setAgentPhones({ ...agentPhones, [id]: e.target.value });

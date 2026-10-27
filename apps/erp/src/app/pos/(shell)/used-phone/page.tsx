@@ -75,7 +75,7 @@ export default function UsedPhonePage() {
                 )
               }
             >
-              <Input value={f.imei} maxLength={15} onChange={(e) => setF({ ...f, imei: e.target.value.replace(/\D/g, "") })} className="num" />
+              <Input inputMode="numeric" value={f.imei} maxLength={15} onChange={(e) => setF({ ...f, imei: e.target.value.replace(/\D/g, "") })} className="num" />
             </Field>
             <Field label="سعر الشراء">
               <Input type="number" value={f.price} onChange={(e) => setF({ ...f, price: e.target.value })} className="num font-semibold" />
@@ -114,10 +114,10 @@ export default function UsedPhonePage() {
                 <Input value={f.seller.name} onChange={(e) => setF({ ...f, seller: { ...f.seller, name: e.target.value } })} />
               </Field>
               <Field label="التليفون">
-                <Input value={f.seller.phone} onChange={(e) => setF({ ...f, seller: { ...f.seller, phone: e.target.value } })} className="num" />
+                <Input type="tel" inputMode="tel" autoComplete="off" value={f.seller.phone} onChange={(e) => setF({ ...f, seller: { ...f.seller, phone: e.target.value } })} className="num" />
               </Field>
               <Field label="الرقم القومي">
-                <Input value={f.seller.nationalId} maxLength={14} onChange={(e) => setF({ ...f, seller: { ...f.seller, nationalId: e.target.value.replace(/\D/g, "") } })} className="num" />
+                <Input inputMode="numeric" value={f.seller.nationalId} maxLength={14} onChange={(e) => setF({ ...f, seller: { ...f.seller, nationalId: e.target.value.replace(/\D/g, "") } })} className="num" />
               </Field>
               <div className="col-span-2 grid grid-cols-2 gap-2">
                 {["صورة البطاقة (وش)", "صورة البطاقة (ضهر)"].map((d) => (

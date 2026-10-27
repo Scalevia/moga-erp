@@ -193,7 +193,7 @@ export function CheckoutModal({
                 <Input value={customer.name} onChange={(e) => onCustomerChange({ ...customer, name: e.target.value })} />
               </Field>
               <Field label="تليفونه">
-                <Input value={customer.phone} onChange={(e) => onCustomerChange({ ...customer, phone: e.target.value })} className="num" />
+                <Input type="tel" inputMode="tel" autoComplete="off" value={customer.phone} onChange={(e) => onCustomerChange({ ...customer, phone: e.target.value })} className="num" />
               </Field>
               <p className="col-span-2 text-xs text-ink-3">الباقي هيظهر في الحسابات تحت «فلوس للمحل»، وتحصّله منه بعدين.</p>
             </div>
@@ -213,10 +213,10 @@ export function CheckoutModal({
                   <Input value={customer.name} onChange={(e) => onCustomerChange({ ...customer, name: e.target.value })} />
                 </Field>
                 <Field label="التليفون">
-                  <Input value={customer.phone} onChange={(e) => onCustomerChange({ ...customer, phone: e.target.value })} className="num" />
+                  <Input type="tel" inputMode="tel" autoComplete="off" value={customer.phone} onChange={(e) => onCustomerChange({ ...customer, phone: e.target.value })} className="num" />
                 </Field>
                 <Field label="الرقم القومي (14 رقم)" className="col-span-2">
-                  <Input value={customer.nationalId} maxLength={14} onChange={(e) => onCustomerChange({ ...customer, nationalId: e.target.value.replace(/\D/g, "") })} className="num tracking-wider" />
+                  <Input inputMode="numeric" value={customer.nationalId} maxLength={14} onChange={(e) => onCustomerChange({ ...customer, nationalId: e.target.value.replace(/\D/g, "") })} className="num tracking-wider" />
                 </Field>
               </div>
             </section>
@@ -227,10 +227,10 @@ export function CheckoutModal({
                   <Input value={guarantor.name} onChange={(e) => setGuarantor({ ...guarantor, name: e.target.value })} />
                 </Field>
                 <Field label="التليفون">
-                  <Input value={guarantor.phone} onChange={(e) => setGuarantor({ ...guarantor, phone: e.target.value })} className="num" />
+                  <Input type="tel" inputMode="tel" autoComplete="off" value={guarantor.phone} onChange={(e) => setGuarantor({ ...guarantor, phone: e.target.value })} className="num" />
                 </Field>
                 <Field label="الرقم القومي" className="col-span-2">
-                  <Input value={guarantor.nationalId} maxLength={14} onChange={(e) => setGuarantor({ ...guarantor, nationalId: e.target.value.replace(/\D/g, "") })} className="num tracking-wider" />
+                  <Input inputMode="numeric" value={guarantor.nationalId} maxLength={14} onChange={(e) => setGuarantor({ ...guarantor, nationalId: e.target.value.replace(/\D/g, "") })} className="num tracking-wider" />
                 </Field>
               </div>
             </section>

@@ -32,7 +32,7 @@ export default function ReturnsPage() {
       <PageHeader title="مرتجع من زبون" subtitle="امسح الـ IMEI أو اكتب رقم الفاتورة" />
       <div className="relative mb-4">
         <Search size={18} className="pointer-events-none absolute start-4 top-1/2 -translate-y-1/2 text-ink-3" />
-        <Input autoFocus value={q} onChange={(e) => setQ(e.target.value)} className="h-12 ps-11 text-base" placeholder="IMEI أو رقم فاتورة (مثال: 1500)" />
+        <Input autoFocus inputMode="numeric" value={q} onChange={(e) => setQ(e.target.value)} className="h-12 ps-11 text-base" placeholder="IMEI أو رقم فاتورة (مثال: 1500)" />
       </div>
 
       {code && !order && <p className="text-center text-sm text-ink-3">مفيش فاتورة بالرقم ده</p>}

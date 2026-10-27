@@ -191,16 +191,16 @@ export function ProductsStep() {
                           )}
                         </td>
                         <td className="px-1 py-1">
-                          <input type="number" value={p.cost} onChange={(e) => setP(p.key, { cost: e.target.value })} className={cn(cell, "num")} />
+                          <input type="number" inputMode="numeric" value={p.cost} onChange={(e) => setP(p.key, { cost: e.target.value })} className={cn(cell, "num")} />
                         </td>
                         <td className="px-1 py-1">
-                          <input type="number" value={p.retail} onChange={(e) => setP(p.key, { retail: e.target.value })} className={cn(cell, "num", bad && "text-bad")} />
+                          <input type="number" inputMode="numeric" value={p.retail} onChange={(e) => setP(p.key, { retail: e.target.value })} className={cn(cell, "num", bad && "text-bad")} />
                         </td>
                         <td className="px-1 py-1">
                           {imei ? (
                             <span className="num block px-2 text-ink-2">{count}</span>
                           ) : (
-                            <input type="number" value={p.qty} onChange={(e) => setP(p.key, { qty: e.target.value })} className={cn(cell, "num")} />
+                            <input type="number" inputMode="numeric" value={p.qty} onChange={(e) => setP(p.key, { qty: e.target.value })} className={cn(cell, "num")} />
                           )}
                         </td>
                         <td className="px-2 py-1">
@@ -337,7 +337,7 @@ function PasteModal({ onClose }: { onClose: () => void }) {
 interface Col<T> {
   key: keyof T & string;
   label: string;
-  type?: "text" | "number" | "date";
+  type?: "text" | "number" | "date" | "tel" | "digits"; // tel: phone keypad · digits: number pad, kept as text (IDs)
   width?: string;
   placeholder?: string;
 }
@@ -382,11 +382,12 @@ function ListEditor<T extends { key: string }>({
                   {cols.map((c) => (
                     <td key={c.key} className="px-1 py-1">
                       <input
-                        type={c.type ?? "text"}
+                        type={c.type === "digits" ? "text" : (c.type ?? "text")}
+                        inputMode={c.type === "number" || c.type === "digits" ? "numeric" : c.type === "tel" ? "tel" : undefined}
                         value={r[c.key] as string}
                         placeholder={c.placeholder}
                         onChange={(e) => onChange(rows.map((x) => (x.key === r.key ? { ...x, [c.key]: e.target.value } : x)))}
-                        className={cn(cell, c.type === "number" && "num")}
+                        className={cn(cell, (c.type === "number" || c.type === "tel" || c.type === "digits") && "num")}
                       />
                     </td>
                   ))}
@@ -426,7 +427,7 @@ export function SuppliersStep() {
       empty="أضف كل الموردين اللي بتتعامل معاهم — حتى لو مش عليك لهم حاجة"
       cols={[
         { key: "name", label: "اسم المورد" },
-        { key: "phone", label: "التليفون", width: "w-40" },
+        { key: "phone", label: "التليفون", type: "tel", width: "w-40" },
         { key: "balance", label: "عليك له كام", type: "number", width: "w-36", placeholder: "0" },
       ]}
       total={{ label: "إجمالي اللي عليك للموردين", value: draft.suppliers.reduce((a, s) => a + n(s.balance), 0) }}
@@ -445,7 +446,7 @@ export function LendersStep() {
       empty="لو المحل مستلف فلوس من حد، سجّل المتبقي عليه هنا"
       cols={[
         { key: "name", label: "اسم المُقرض" },
-        { key: "phone", label: "التليفون", width: "w-40" },
+        { key: "phone", label: "التليفون", type: "tel", width: "w-40" },
         { key: "remaining", label: "المتبقي", type: "number", width: "w-32" },
         { key: "notes", label: "ملاحظات", width: "w-48" },
       ]}
@@ -499,14 +500,14 @@ export function InstallmentsStep() {
         empty="لو مفيش عملاء عليهم أقساط دلوقتي، كمّل للخطوة الجاية"
         cols={[
           { key: "name", label: "العميل" },
-          { key: "phone", label: "التليفون", width: "w-32" },
-          { key: "nationalId", label: "الرقم القومي", width: "w-36" },
+          { key: "phone", label: "التليفون", type: "tel", width: "w-32" },
+          { key: "nationalId", label: "الرقم القومي", type: "digits", width: "w-36" },
           { key: "item", label: "الجهاز", width: "w-36" },
           { key: "remaining", label: "المتبقي", type: "number", width: "w-24" },
           { key: "monthly", label: "القسط", type: "number", width: "w-24" },
           { key: "nextDue", label: "القسط الجاي", type: "date", width: "w-36" },
           { key: "guarantorName", label: "الضامن", width: "w-32" },
-          { key: "guarantorPhone", label: "تليفون الضامن", width: "w-32" },
+          { key: "guarantorPhone", label: "تليفون الضامن", type: "tel", width: "w-32" },
         ]}
         total={{ label: "إجمالي الأقساط عند العملاء", value: draft.installments.reduce((a, x) => a + n(x.remaining), 0) }}
       />

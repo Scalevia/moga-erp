@@ -298,7 +298,7 @@ export default function SalePage() {
           </div>
           <div className="space-y-3">
             <Field label="رقم التليفون">
-              <Input value={customer.phone} onChange={(e) => setCustomer({ ...customer, phone: e.target.value })} className="num" placeholder="01xxxxxxxxx" />
+              <Input type="tel" inputMode="tel" autoComplete="off" value={customer.phone} onChange={(e) => setCustomer({ ...customer, phone: e.target.value })} className="num" placeholder="01xxxxxxxxx" />
             </Field>
             <Field label="الاسم">
               <Input value={customer.name} onChange={(e) => setCustomer({ ...customer, name: e.target.value })} />

@@ -177,7 +177,7 @@ function EmployeeForm({ employee, onClose }: { employee: Employee | null; onClos
           <Input autoFocus value={name} onChange={(e) => setName(e.target.value)} />
         </Field>
         <Field label="التليفون">
-          <Input value={phone} onChange={(e) => setPhone(e.target.value)} className="num" placeholder="01xxxxxxxxx" />
+          <Input type="tel" inputMode="tel" autoComplete="off" value={phone} onChange={(e) => setPhone(e.target.value)} className="num" placeholder="01xxxxxxxxx" />
         </Field>
         <div>
           <span className="mb-1 block text-sm font-medium text-ink-2">الصلاحية</span>
