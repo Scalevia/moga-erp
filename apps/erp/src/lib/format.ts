@@ -88,11 +88,12 @@ export const defaultServices: ShopService[] = [
 export const OTHER_SERVICE_ID = "svc-other";
 
 export const paymentLabel: Record<PaymentMethod, string> = {
-  cash: "كاش",
+  cash: "نقدي", // not "كاش", which is easily confused with فودافون كاش
   vodafone_cash: "فودافون كاش",
   instapay: "إنستاباي",
   card: "فيزا",
   installment: "تقسيط",
+  credit: "على الحساب (آجل)",
 };
 
 export const ledgerLabel: Record<LedgerKind, string> = {
@@ -118,5 +119,6 @@ export const ledgerLabel: Record<LedgerKind, string> = {
   refund: "رد فلوس مرتجع",
   lent_repaid: "استرداد سلفة",
   installment_collection: "تحصيل قسط",
+  credit_collection: "تحصيل حساب زبون",
   count_adjustment: "فرق عدّ",
 };

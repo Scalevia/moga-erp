@@ -4,14 +4,14 @@ import { Search, ShieldCheck, ShieldOff, Smartphone } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Badge, Card, CardHeader, Input, Money, PageHeader, cn } from "@/components/ui";
 import { date, num } from "@/lib/format";
-import { orderTotal, planOverdue, planRemaining, useStore } from "@/lib/store";
+import { creditBalance, orderTotal, planOverdue, planRemaining, useStore } from "@/lib/store";
 import type { Contact } from "@/lib/types";
 
 const DAY = 86400000;
 
 export default function CustomersPage() {
   const store = useStore();
-  const { contacts, orders, plans, units, products, settings } = store;
+  const { contacts, orders, plans, units, products, settings, movements } = store;
   const isAdmin = store.staff.find((e) => e.id === store.currentEmployeeId)?.role === "admin";
   const [q, setQ] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -29,13 +29,13 @@ export default function CustomersPage() {
           invoices: mine.length,
           spent: mine.reduce((a, o) => a + orderTotal(o), 0),
           last: mine.reduce((a, o) => (o.createdAt > a ? o.createdAt : a), ""),
-          owes: myPlans.reduce((a, p) => a + planRemaining(p), 0),
+          owes: myPlans.reduce((a, p) => a + planRemaining(p), 0) + Math.max(0, creditBalance({ orders, movements }, c.id)),
           late: myPlans.some((p) => planOverdue(p).count > 0),
         };
       })
       .filter((r) => !term || r.c.name.toLowerCase().includes(term) || r.c.phone.includes(term) || r.c.nationalId?.includes(term))
       .sort((a, b) => b.last.localeCompare(a.last));
-  }, [contacts, orders, plans, q]);
+  }, [contacts, orders, plans, movements, q]);
 
   const selected = rows.find((r) => r.c.id === selectedId) ?? (q ? rows[0] : undefined);
 

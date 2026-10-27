@@ -32,7 +32,7 @@ export interface Line {
   onOpen?: () => void; // the line opens its source (e.g. a supplier invoice)
 }
 
-const viaLabel = { cash: "كاش", wallet: "فودافون كاش", bank: "إنستاباي" } as const;
+const viaLabel = { cash: "نقدي", wallet: "فودافون كاش", bank: "إنستاباي" } as const;
 
 /**
  * A dated statement, newest first, with the balance after each line.

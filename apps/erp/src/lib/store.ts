@@ -127,7 +127,8 @@ interface State {
   login: (employeeId: string) => void;
   logout: () => void;
   completeSale: (input: SaleInput) => Order;
-  returnOrder: (orderId: string) => void;
+  /** Return a whole order. `via` = the money went back another way than it was paid (all of it from there). */
+  returnOrder: (orderId: string, input: { reason: string; via?: "cash" | "wallet" | "bank" }) => void;
   recordMovement: (m: Omit<CashMovement, "id" | "createdAt" | "shiftId" | "employeeId">) => void;
   buyUsedPhone: (input: {
     productName: string;
@@ -152,6 +153,8 @@ interface State {
   setServices: (list: ShopService[]) => void;
   paySalary: (input: { employeeId: string; month: string; via: "cash" | "wallet" | "bank" }) => PayrollEntry;
   addSupplier: (input: { name: string; phone: string }) => string;
+  /** A customer pays (part of) what's on their account from sales they didn't pay in full. */
+  collectCredit: (input: { customerId: string; amount: number; via: "cash" | "wallet" }) => void;
   /** Pay a supplier part of what the shop owes them. */
   paySupplier: (input: { supplierId: string; amount: number; via: "cash" | "wallet" | "bank"; note?: string }) => void;
   addProduct: (input: NewProductInput) => string;
@@ -285,8 +288,10 @@ export const useStore = create<State>()(
             set((st) => ({ plans: [...st.plans, plan] }));
           }
 
+          // Paid more than the price and left it: it's part of the sale (and its profit).
+          const extra = Math.max(0, input.payments.reduce((a, p) => a + p.amount, 0) - input.items.reduce((a, i) => a + i.qty * i.unitPrice, 0));
           const order: Order = {
-            id: orderId, number: s.nextOrderNo, createdAt: nowIso(),
+            id: orderId, number: s.nextOrderNo, createdAt: nowIso(), extra: extra || undefined,
             employeeId: s.currentEmployeeId ?? "unknown", shiftId: shift?.id ?? "none",
             customerId, items: input.items, payments: input.payments, installmentPlanId: planId, status: "completed",
           };
@@ -304,13 +309,14 @@ export const useStore = create<State>()(
           return order;
         },
 
-        returnOrder: (orderId) => {
+        returnOrder: (orderId, { reason, via }) => {
           const order = get().orders.find((o) => o.id === orderId);
           if (!order || order.status === "returned") return;
           const imeis = new Set(order.items.filter((i) => i.imei).map((i) => i.imei));
-          const refund = refundFor(get(), order);
+          const refund = refundFor(get(), order, via);
+          const returned = { at: nowIso(), by: get().currentEmployeeId ?? "unknown", reason };
           set((st) => ({
-            orders: st.orders.map((o) => (o.id === orderId ? { ...o, status: "returned" } : o)),
+            orders: st.orders.map((o) => (o.id === orderId ? { ...o, status: "returned", returned } : o)),
             units: st.units.map((u) => (imeis.has(u.imei) ? { ...u, status: "in_stock", soldOrderId: undefined } : u)),
             products: st.products.map((p) => {
               const q = order.items.filter((i) => !i.imei && i.productId === p.id).reduce((a, i) => a + i.qty, 0);
@@ -321,16 +327,31 @@ export const useStore = create<State>()(
           }));
           // Everything the customer paid goes back the way it came in. The markup already counted as profit
           // on collected installments is reversed; the sale's own profit drops out with the order's status.
-          if (refund.total)
+          // What they had paid off their account toward this sale is a reversed collection, so their account
+          // ends at zero for it rather than showing the shop owing them.
+          const out = { cash: refund.cash, wallet: refund.wallet, bank: refund.bank };
+          out[refund.fromAccountVia] -= refund.fromAccount;
+          if (refund.fromAccount)
+            movement({
+              kind: "credit_collection",
+              cash: refund.fromAccountVia === "cash" ? -refund.fromAccount : 0,
+              wallet: refund.fromAccountVia === "wallet" ? -refund.fromAccount : 0,
+              bank: refund.fromAccountVia === "bank" ? -refund.fromAccount : 0,
+              topup: 0,
+              commission: 0,
+              contactId: order.customerId,
+              description: `رد اللي اتدفع من الحساب — مرتجع فاتورة #${order.number}`,
+            });
+          if (out.cash + out.wallet + out.bank || refund.markup)
             movement({
               kind: "refund",
-              cash: -refund.cash || 0, // `|| 0` keeps a zero from being stored as -0
-              wallet: -refund.wallet || 0,
-              bank: -refund.bank || 0,
+              cash: -out.cash || 0, // `|| 0` keeps a zero from being stored as -0
+              wallet: -out.wallet || 0,
+              bank: -out.bank || 0,
               topup: 0,
               commission: -refund.markup || 0,
               planId: refund.plan?.id,
-              description: `مرتجع فاتورة #${order.number}${refund.installments ? ` (منها أقساط اتدفعت ${refund.installments.toLocaleString("en")})` : ""}`,
+              description: `مرتجع فاتورة #${order.number}${refund.installments ? ` (منها أقساط اتدفعت ${refund.installments.toLocaleString("en")})` : ""} — ${reason}`,
             });
         },
 
@@ -406,6 +427,19 @@ export const useStore = create<State>()(
               description: `دفعة لـ ${supplier?.name ?? ""} — فاتورة استلام #${invoice.number}`,
             });
           return invoice;
+        },
+
+        collectCredit: ({ customerId, amount, via }) => {
+          const name = get().contacts.find((c) => c.id === customerId)?.name ?? "";
+          movement({
+            kind: "credit_collection",
+            cash: via === "cash" ? amount : 0,
+            wallet: via === "wallet" ? amount : 0,
+            topup: 0,
+            commission: 0,
+            contactId: customerId,
+            description: `${name} دفع من حسابه ${amount.toLocaleString("en")}`,
+          });
         },
 
         paySupplier: ({ supplierId, amount, via, note }) => {
@@ -706,8 +740,9 @@ export function unitPrice(u: PhoneUnit, p: Product) {
   return u.retailPrice ?? p.retailPrice;
 }
 
+/** What the customer paid for the order: the items, plus any extra they left. */
 export function orderTotal(o: Order) {
-  return o.items.reduce((a, i) => a + i.qty * i.unitPrice, 0);
+  return o.items.reduce((a, i) => a + i.qty * i.unitPrice, 0) + (o.extra ?? 0);
 }
 
 export function orderDiscount(o: Order) {
@@ -715,7 +750,7 @@ export function orderDiscount(o: Order) {
 }
 
 export function orderProfit(o: Order) {
-  return o.items.reduce((a, i) => a + i.qty * (i.unitPrice - i.unitCost), 0);
+  return o.items.reduce((a, i) => a + i.qty * (i.unitPrice - i.unitCost), 0) + (o.extra ?? 0);
 }
 
 export function shiftBreakdown(s: Pick<State, "orders" | "movements">, shift: Shift) {
@@ -839,16 +874,20 @@ export function planOverdue(p: InstallmentPlan, now = new Date()) {
  * What returning a whole order gives back to the customer, by where the money leaves from: each payment
  * goes back the way it came in (cash → drawer, Vodafone Cash → wallet, InstaPay/card → bank). For an
  * installment sale it also includes the installments already collected, and the markup profit counted
- * on them, which the return reverses.
+ * on them, which the return reverses. `via` sends the whole amount back from one place instead.
  */
-export function refundFor(s: Pick<State, "plans" | "movements">, order: Order) {
+export function refundFor(s: Pick<State, "plans" | "movements" | "orders">, order: Order, via?: "cash" | "wallet" | "bank") {
   const by = { cash: 0, wallet: 0, bank: 0 };
   for (const p of order.payments) {
     if (p.method === "cash") by.cash += p.amount;
     else if (p.method === "vodafone_cash") by.wallet += p.amount;
     else if (p.method === "instapay" || p.method === "card") by.bank += p.amount;
-    // "installment" is the financed part: nothing was received for it at the sale.
+    // "installment" (financed) and "credit" (on account): nothing was received for them at the sale.
   }
+  // Bought partly on account: whatever they already paid off toward this sale comes back (as cash).
+  const onAccount = order.payments.filter((p) => p.method === "credit").reduce((a, p) => a + p.amount, 0);
+  const fromAccount = onAccount && order.customerId ? Math.min(onAccount, Math.max(0, onAccount - creditBalance(s, order.customerId))) : 0;
+  by.cash += fromAccount;
   const plan = order.installmentPlanId ? s.plans.find((p) => p.id === order.installmentPlanId && !p.cancelledAt) : undefined;
   let installments = 0;
   let markup = 0;
@@ -867,7 +906,30 @@ export function refundFor(s: Pick<State, "plans" | "movements">, order: Order) {
     by.cash += untraced;
     markup += Math.round((untraced * plan.markupPercent) / (100 + plan.markupPercent));
   }
-  return { ...by, total: by.cash + by.wallet + by.bank, installments, markup, plan };
+  const total = by.cash + by.wallet + by.bank;
+  // Given back another way than it was paid (e.g. paid by card, refunded in cash): all of it from there.
+  const out = via ? { cash: 0, wallet: 0, bank: 0, [via]: total } : by;
+  // `fromAccount` is part of the amounts above, leaving from `fromAccountVia`.
+  return { ...out, total, installments, markup, plan, fromAccount, onAccount, fromAccountVia: via ?? ("cash" as const) };
+}
+
+/**
+ * A customer's account (آجل): what they left unpaid on their sales, less what they paid off since.
+ * The sale's profit counts on the sale day like any sale; this is money still to come in.
+ */
+export function creditBalance(s: Pick<State, "orders" | "movements">, customerId: string) {
+  const owed = s.orders
+    .filter((o) => o.status === "completed" && o.customerId === customerId)
+    .flatMap((o) => o.payments)
+    .filter((p) => p.method === "credit")
+    .reduce((a, p) => a + p.amount, 0);
+  const paid = s.movements.filter((m) => m.kind === "credit_collection" && m.contactId === customerId).reduce((a, m) => a + m.cash + m.wallet + (m.bank ?? 0), 0);
+  return owed - paid;
+}
+
+/** Customers who ever bought on account. */
+export function creditCustomerIds(s: Pick<State, "orders">) {
+  return [...new Set(s.orders.filter((o) => o.customerId && o.payments.some((p) => p.method === "credit")).map((o) => o.customerId!))];
 }
 
 /** Advances given to an employee and not yet deducted from a salary. */

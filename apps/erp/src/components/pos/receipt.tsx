@@ -91,7 +91,7 @@ export function Receipt({ order }: { order: Order }) {
         <>
           <div className="flex justify-between">
             <span>المجموع</span>
-            <span className="num">{num(total + discount)}</span>
+            <span className="num">{num(total - (order.extra ?? 0) + discount)}</span>
           </div>
           <div className="flex justify-between">
             <span>الخصم</span>
@@ -99,6 +99,12 @@ export function Receipt({ order }: { order: Order }) {
           </div>
         </>
       )}
+      {order.extra ? (
+        <div className="flex justify-between">
+          <span>زيادة من الزبون</span>
+          <span className="num">+ {num(order.extra)}</span>
+        </div>
+      ) : null}
       <div className="flex justify-between text-sm font-bold">
         <span>الإجمالي</span>
         <span className="num">{num(total)} ج.م</span>

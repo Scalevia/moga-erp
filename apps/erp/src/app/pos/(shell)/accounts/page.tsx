@@ -1,14 +1,14 @@
 "use client";
 
-import { CalendarClock, ChevronLeft, HandHelping, Landmark, Search, Smartphone, Truck } from "lucide-react";
+import { CalendarClock, ChevronLeft, HandHelping, Landmark, Receipt, Search, Smartphone, Truck } from "lucide-react";
 import { useState } from "react";
-import { AgentAccountModal, InstallmentAccountModal, SupplierAccountModal } from "@/components/pos/account-modals";
+import { AgentAccountModal, CreditAccountModal, InstallmentAccountModal, SupplierAccountModal } from "@/components/pos/account-modals";
 import { PersonAccountModal } from "@/components/pos/person-account";
 import { CallButton } from "@/components/pos/statement";
 import { Badge, Card, Input, Money, PageHeader, Segmented, cn } from "@/components/ui";
 import { personAccounts } from "@/lib/debts";
 import { dayMonth, machineIds, machineLabel, sinceDays } from "@/lib/format";
-import { daysSince, lentOverdueDays, outstandingAdvances, planOverdue, planRemaining, repBalance, repUnpaidSince, useStore } from "@/lib/store";
+import { creditBalance, creditCustomerIds, daysSince, lentOverdueDays, outstandingAdvances, planOverdue, planRemaining, repBalance, repUnpaidSince, useStore } from "@/lib/store";
 import type { MachineId } from "@/lib/types";
 
 /**
@@ -17,8 +17,13 @@ import type { MachineId } from "@/lib/types";
  * advances, the savings circle (الجمعية) and grand totals — those stay on the owner's dashboard.
  */
 
-type Kind = "installment" | "lent" | "agent" | "supplier" | "loan";
-type Open = { kind: "person"; phone: string } | { kind: "supplier"; id: string } | { kind: "agent"; id: MachineId } | { kind: "installment"; id: string };
+type Kind = "installment" | "credit" | "lent" | "agent" | "supplier" | "loan";
+type Open =
+  | { kind: "person"; phone: string }
+  | { kind: "supplier"; id: string }
+  | { kind: "agent"; id: MachineId }
+  | { kind: "installment"; id: string }
+  | { kind: "credit"; id: string };
 
 interface Entry {
   key: string;
@@ -34,6 +39,7 @@ interface Entry {
 
 const kinds: Record<Kind, { label: string; filter: string; icon: typeof Truck }> = {
   installment: { label: "تقسيط", filter: "تقسيط", icon: CalendarClock },
+  credit: { label: "باقي فواتير (آجل)", filter: "آجل", icon: Receipt },
   lent: { label: "سلفة من المحل", filter: "سُلف", icon: HandHelping },
   agent: { label: "مندوب", filter: "مناديب", icon: Smartphone },
   supplier: { label: "مورد", filter: "موردين", icon: Truck },
@@ -79,6 +85,11 @@ export default function AccountsPage() {
       open: { kind: "installment", id },
     });
   }
+  for (const id of creditCustomerIds(store)) {
+    const c = contact(id);
+    const b = creditBalance(store, id);
+    owed.push({ key: `credit-${id}`, kind: "credit", name: c?.name ?? "—", detail: "", amount: Math.max(0, b), phone: c?.phone, settled: b <= 0, open: { kind: "credit", id } });
+  }
   for (const p of people.filter((x) => x.borrowerIds.length > 0)) {
     const late = Math.max(0, ...store.lentOut.filter((l) => p.borrowerIds.includes(l.borrowerId)).map((l) => lentOverdueDays(l)));
     owed.push({
@@ -105,6 +116,7 @@ export default function AccountsPage() {
       name: `مندوب ${machineLabel[id]}`,
       detail: b > 0 && since ? `مستني فلوسه ${sinceDays(daysSince(since))}` : "",
       amount: Math.max(0, b),
+      phone: store.settings.agentPhones?.[id] || undefined,
       settled: b <= 0,
       open: { kind: "agent", id },
     });
@@ -228,6 +240,7 @@ export default function AccountsPage() {
       {open?.kind === "supplier" && <SupplierAccountModal supplierId={open.id} onClose={() => setOpen(null)} />}
       {open?.kind === "agent" && <AgentAccountModal id={open.id} onClose={() => setOpen(null)} />}
       {open?.kind === "installment" && <InstallmentAccountModal customerId={open.id} onClose={() => setOpen(null)} />}
+      {open?.kind === "credit" && <CreditAccountModal customerId={open.id} onClose={() => setOpen(null)} />}
     </div>
   );
 }

@@ -3,7 +3,7 @@
 
 import { inventoryValue } from "./analytics";
 import { balanceIds, balanceLabel, machineIds, machineLabel } from "./format";
-import { bankBalance, currentShift, lentRemaining, loanRemaining, expectedCash, lastClosedShift, machineBalance, outstandingAdvances, planRemaining, repBalance, useStore, walletBalance } from "./store";
+import { bankBalance, creditBalance, creditCustomerIds, currentShift, lentRemaining, loanRemaining, expectedCash, lastClosedShift, machineBalance, outstandingAdvances, planRemaining, repBalance, useStore, walletBalance } from "./store";
 import type { ProductCategory } from "./types";
 
 type StoreState = ReturnType<typeof useStore.getState>;
@@ -86,6 +86,10 @@ export function capital(s: StoreState) {
     lines: [
       { label: "أقساط عند العملاء", value: principal, sub: `بالزيادة ${Math.round(withMarkup).toLocaleString("en")} — الزيادة بتتحسب لما تتحصل` },
       { label: "الجمعية", value: savingsBalance(s), sub: "اللي دفعته ولسه ما قبضتهاش" },
+      ...(() => {
+        const owing = creditCustomerIds(s).map((id) => creditBalance(s, id)).filter((v) => v > 0);
+        return owing.length ? [{ label: "باقي فواتير على زباين (آجل)", value: owing.reduce((a, v) => a + v, 0), sub: `${owing.length} زبون` }] : [];
+      })(),
       ...(() => {
         const open = s.lentOut.filter((l) => lentRemaining(l) > 0);
         return open.length

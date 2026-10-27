@@ -21,6 +21,7 @@ export interface ShopSettings {
   usedWarrantyDays: number;
   agentVfFeePercent: number;
   employeeLendLimit: number;
+  agentPhones?: Partial<Record<MachineId, string>>;
 }
 
 /** A service on the sale screen's quick list (e.g. "نقل بيانات"). */
@@ -140,7 +141,8 @@ export type PaymentMethod =
   | "vodafone_cash"
   | "instapay"
   | "card"
-  | "installment";
+  | "installment"
+  | "credit"; // the part the customer didn't pay — goes on their account (آجل)
 
 export interface Payment {
   method: PaymentMethod;
@@ -170,6 +172,8 @@ export interface Order {
   payments: Payment[];
   installmentPlanId?: string;
   status: "completed" | "returned";
+  extra?: number; // the customer paid more than the price and left it — counted in sales and profit
+  returned?: { at: string; by: string; reason: string };
 }
 
 export interface InstallmentPlan {
@@ -216,6 +220,7 @@ export type LedgerKind =
   | "refund"
   | "lent_repaid"
   | "installment_collection"
+  | "credit_collection" // a customer paying off their account (آجل)
   | "count_adjustment"; // wallet/machine balance set to what was counted at opening or closing
 
 /** Service companies whose machines are topped up by an agent (مندوب). One agent account per company. */

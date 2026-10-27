@@ -7,12 +7,14 @@ import { date, paymentLabel } from "@/lib/format";
 import { buildSchedule, useStore } from "@/lib/store";
 import type { Order, OrderItem, Payment, PaymentMethod } from "@/lib/types";
 
-const methods: { value: Exclude<PaymentMethod, "installment">; icon: typeof Banknote }[] = [
+const methods: { value: Exclude<PaymentMethod, "installment" | "credit">; icon: typeof Banknote }[] = [
   { value: "cash", icon: Banknote },
   { value: "vodafone_cash", icon: Smartphone },
   { value: "instapay", icon: Zap },
   { value: "card", icon: CreditCard },
 ];
+
+type PayWay = Exclude<PaymentMethod, "installment" | "credit"> | "split";
 
 interface Customer {
   name: string;
@@ -41,19 +43,27 @@ export function CheckoutModal({
 
   // The parent mounts this component fresh for each checkout, so initial state is the reset.
   const [mode, setMode] = useState<"full" | "installment">("full");
+  // One way for the whole amount (the usual case), or several ways that add up to the total.
+  const [way, setWay] = useState<PayWay>("cash");
+  const [amountStr, setAmountStr] = useState(String(total)); // what was actually paid, one way
   const [payments, setPayments] = useState<Payment[]>([{ method: "cash", amount: total }]);
-  const [tendered, setTendered] = useState("");
 
   const [down, setDown] = useState(Math.round((total * 0.25) / 100) * 100);
-  const [downMethod, setDownMethod] = useState<Exclude<PaymentMethod, "installment">>("cash");
+  const [downMethod, setDownMethod] = useState<Exclude<PaymentMethod, "installment" | "credit">>("cash");
   const [markup, setMarkup] = useState(20);
   const [months, setMonths] = useState(6);
   const [guarantor, setGuarantor] = useState({ name: "", phone: "", nationalId: "" });
 
   const paid = payments.reduce((a, p) => a + p.amount, 0);
   const remaining = total - paid;
-  const cashPart = payments.filter((p) => p.method === "cash").reduce((a, p) => a + p.amount, 0);
-  const change = Number(tendered) - cashPart;
+  // Paid more: the extra is part of the sale (profit). Paid less: the rest goes on the customer's account.
+  const paidNow = way === "split" ? paid : Math.max(0, Number(amountStr) || 0);
+  const diff = paidNow - total;
+  const fullPayments: Payment[] = [
+    ...(way === "split" ? payments.filter((p) => p.amount > 0) : paidNow > 0 ? [{ method: way, amount: paidNow }] : []),
+    ...(diff < 0 ? [{ method: "credit" as const, amount: -diff }] : []),
+  ];
+  const fullValid = diff >= 0 || (customer.name.trim() !== "" && customer.phone.trim() !== "");
 
   const financed = Math.max(0, Math.round((total - down) * (1 + markup / 100)));
   const schedule = useMemo(() => buildSchedule(financed, months, new Date()), [financed, months]);
@@ -65,7 +75,7 @@ export function CheckoutModal({
   function submit() {
     const order =
       mode === "full"
-        ? completeSale({ items: cart, payments: payments.filter((p) => p.amount > 0), customer: customer.phone ? customer : undefined })
+        ? completeSale({ items: cart, payments: fullPayments, customer: customer.phone ? customer : undefined })
         : completeSale({
             items: cart,
             payments: [
@@ -101,69 +111,95 @@ export function CheckoutModal({
       </div>
 
       {mode === "full" ? (
-        <div className="space-y-3">
-          {payments.map((p, i) => (
-            <div key={i} className="flex items-center gap-2">
-              <Select
-                value={p.method}
-                onChange={(e) => setPayments(payments.map((x, j) => (j === i ? { ...x, method: e.target.value as PaymentMethod } : x)))}
-                className="w-40"
-              >
-                {methods.map((m) => (
-                  <option key={m.value} value={m.value}>
-                    {paymentLabel[m.value]}
-                  </option>
-                ))}
-              </Select>
-              <Input
-                type="number"
-                value={p.amount}
-                onChange={(e) => setPayments(payments.map((x, j) => (j === i ? { ...x, amount: Number(e.target.value) } : x)))}
-                className="num flex-1 text-end text-lg font-semibold"
-              />
-              {payments.length > 1 && (
-                <button onClick={() => setPayments(payments.filter((_, j) => j !== i))} className="rounded-lg p-2 text-ink-3 hover:text-bad">
-                  <Trash2 size={16} />
-                </button>
+        <div className="space-y-4">
+          <div>
+            <span className="mb-2 block text-sm font-semibold text-ink-2">الزبون دفع إزاي؟</span>
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+              {[...methods.map((m) => ({ value: m.value as PayWay, label: paymentLabel[m.value], icon: m.icon })), { value: "split" as PayWay, label: "أكتر من طريقة", icon: Plus }].map(
+                ({ value, label, icon: Icon }) => (
+                  <button
+                    key={value}
+                    onClick={() => setWay(value)}
+                    className={cn(
+                      "flex items-center justify-center gap-2 rounded-lg border px-3 py-3 text-sm font-medium transition",
+                      way === value ? "border-brand bg-brand-soft text-brand" : "border-border hover:bg-surface-2",
+                    )}
+                  >
+                    <Icon size={16} /> {label}
+                  </button>
+                ),
               )}
             </div>
-          ))}
-          <div className="flex flex-wrap gap-2">
-            {methods.map(({ value, icon: Icon }) => (
-              <button
-                key={value}
-                onClick={() => setPayments([...payments, { method: value, amount: Math.max(0, remaining) }])}
-                className="inline-flex items-center gap-1.5 rounded-full border border-dashed border-border px-3 py-1.5 text-sm text-ink-2 hover:border-brand hover:text-brand"
-              >
-                <Plus size={14} />
-                <Icon size={14} /> {paymentLabel[value]}
-              </button>
-            ))}
           </div>
 
-          <div
-            className={cn(
-              "flex items-center justify-between rounded-lg px-4 py-3 text-sm font-medium",
-              remaining === 0 ? "bg-good-soft text-good" : "bg-warn-soft text-warn",
-            )}
-          >
-            <span>{remaining === 0 ? "المبلغ مكتمل" : remaining > 0 ? "متبقي" : "زيادة"}</span>
-            {remaining !== 0 && <Money value={Math.abs(remaining)} />}
-          </div>
+          {way !== "split" && (
+            <Field label="المبلغ اللي اتدفع">
+              <Input type="number" min={0} value={amountStr} onChange={(e) => setAmountStr(e.target.value)} placeholder="0" className="num text-lg font-semibold" aria-label="المبلغ اللي اتدفع" />
+            </Field>
+          )}
 
-          {cashPart > 0 && (
-            <div className="grid grid-cols-2 gap-3 rounded-lg border border-border p-3">
-              <Field label="الزبون دفع كاش">
-                <Input type="number" value={tendered} onChange={(e) => setTendered(e.target.value)} className="num text-lg" placeholder={String(cashPart)} />
-              </Field>
-              <div>
-                <span className="mb-1 block text-sm font-medium text-ink-2">الباقي للزبون</span>
-                <div className="flex h-10 items-center text-xl font-bold">{tendered && change >= 0 ? <Money value={change} /> : "—"}</div>
+          {way === "split" && (
+            <div className="space-y-3">
+              {/* Method and amount side by side, half each, so the amount is always readable on a phone. */}
+              <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_2.25rem] gap-2 text-xs text-ink-3">
+                <span>طريقة الدفع</span>
+                <span>المبلغ</span>
               </div>
+              {payments.map((p, i) => (
+                <div key={i} className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_2.25rem] items-center gap-2">
+                  <Select
+                    value={p.method}
+                    onChange={(e) => setPayments(payments.map((x, j) => (j === i ? { ...x, method: e.target.value as PaymentMethod } : x)))}
+                    aria-label="طريقة الدفع"
+                  >
+                    {methods.map((m) => (
+                      <option key={m.value} value={m.value}>
+                        {paymentLabel[m.value]}
+                      </option>
+                    ))}
+                  </Select>
+                  <Input
+                    type="number"
+                    min={0}
+                    value={p.amount || ""}
+                    placeholder="0"
+                    onChange={(e) => setPayments(payments.map((x, j) => (j === i ? { ...x, amount: Math.max(0, Number(e.target.value)) } : x)))}
+                    className="num text-lg font-semibold"
+                    aria-label="المبلغ"
+                  />
+                  {payments.length > 1 ? (
+                    <button onClick={() => setPayments(payments.filter((_, j) => j !== i))} className="rounded-lg p-2 text-ink-3 hover:text-bad" aria-label="حذف طريقة الدفع">
+                      <Trash2 size={16} />
+                    </button>
+                  ) : (
+                    <span />
+                  )}
+                </div>
+              ))}
+              <Button variant="secondary" size="sm" onClick={() => setPayments([...payments, { method: "vodafone_cash", amount: Math.max(0, remaining) }])}>
+                <Plus size={14} /> طريقة تانية
+              </Button>
+
             </div>
           )}
 
-          <Button size="lg" className="w-full" disabled={remaining !== 0} onClick={submit}>
+          <div className={cn("flex items-center justify-between rounded-lg px-4 py-3 text-sm font-medium", diff < 0 ? "bg-warn-soft text-warn" : "bg-good-soft text-good")}>
+            <span>{diff === 0 ? "المبلغ مكتمل" : diff > 0 ? "الزبون دفع زيادة — هتتسجل ربح" : "باقي — هيتسجل على حساب الزبون"}</span>
+            {diff !== 0 && <Money value={Math.abs(diff)} />}
+          </div>
+          {diff < 0 && (
+            <div className="grid grid-cols-2 gap-3 rounded-lg border border-warn/40 p-3">
+              <Field label="اسم الزبون">
+                <Input value={customer.name} onChange={(e) => onCustomerChange({ ...customer, name: e.target.value })} />
+              </Field>
+              <Field label="تليفونه">
+                <Input value={customer.phone} onChange={(e) => onCustomerChange({ ...customer, phone: e.target.value })} className="num" />
+              </Field>
+              <p className="col-span-2 text-xs text-ink-3">الباقي هيظهر في الحسابات تحت «فلوس للمحل»، وتحصّله منه بعدين.</p>
+            </div>
+          )}
+
+          <Button size="lg" className="w-full" disabled={!fullValid} onClick={submit}>
             تأكيد البيع وطباعة الفاتورة
           </Button>
         </div>
@@ -214,7 +250,7 @@ export function CheckoutModal({
           <div className="space-y-4">
             <section className="grid grid-cols-2 gap-3">
               <Field label="المقدم">
-                <Input type="number" value={down} onChange={(e) => setDown(Number(e.target.value))} className="num text-lg font-semibold" />
+                <Input type="number" value={down || ""} placeholder="0" onChange={(e) => setDown(Math.max(0, Number(e.target.value)))} className="num text-lg font-semibold" />
               </Field>
               <Field label="طريقة دفع المقدم">
                 <Select value={downMethod} onChange={(e) => setDownMethod(e.target.value as typeof downMethod)}>
@@ -226,7 +262,7 @@ export function CheckoutModal({
                 </Select>
               </Field>
               <Field label="نسبة الزيادة %">
-                <Input type="number" value={markup} onChange={(e) => setMarkup(Number(e.target.value))} className="num" />
+                <Input type="number" value={markup || ""} placeholder="0" onChange={(e) => setMarkup(Math.max(0, Number(e.target.value)))} className="num" />
               </Field>
               <Field label="عدد الشهور">
                 <Select value={months} onChange={(e) => setMonths(Number(e.target.value))}>

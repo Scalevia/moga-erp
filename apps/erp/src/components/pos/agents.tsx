@@ -6,6 +6,7 @@ import { Badge, Button, Card, Field, Input, Money, Segmented, cn } from "@/compo
 import { balanceLabel, balancesOf, machineIds, machineLabel, sinceDays } from "@/lib/format";
 import { daysSince, machineBalance, repBalance, repHistory, repUnpaidSince, useStore } from "@/lib/store";
 import type { BalanceId, MachineId } from "@/lib/types";
+import { CallButton } from "./statement";
 
 /**
  * The agent loads the machine on credit and collects later — usually at the end of the day, but it can
@@ -145,7 +146,10 @@ export function AgentCard({ id, compact = false }: { id: MachineId; compact?: bo
     <Card className={cn("p-4", owed > 0 && "border-warn/40")}>
       <div className="flex items-start justify-between gap-3">
         <div>
-          <div className="font-semibold">مندوب {machineLabel[id]}</div>
+          <div className="flex items-center gap-2 font-semibold">
+            مندوب {machineLabel[id]}
+            <CallButton phone={store.settings.agentPhones?.[id] || undefined} name={`مندوب ${machineLabel[id]}`} className="h-7 w-7" />
+          </div>
           {accounts.map((b) => (
             <div key={b} className="text-xs text-ink-3">
               {accounts.length > 1 ? balanceLabel[b].replace(`${machineLabel[id]} — `, "") : "رصيد الماكينة"} في السيستم <Money value={machineBalance(store, b)} />
@@ -248,7 +252,7 @@ export function AgentCard({ id, compact = false }: { id: MachineId; compact?: bo
             </>
           )}
           <div className="flex gap-2">
-            <Button size="sm" className="flex-1" disabled={!Number(amount) || overpay} onClick={submit}>
+            <Button size="sm" className="flex-1" disabled={!(Number(amount) > 0) || overpay} onClick={submit}>
               تسجيل
             </Button>
             <Button size="sm" variant="ghost" onClick={() => setMode("none")}>

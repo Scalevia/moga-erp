@@ -114,11 +114,11 @@ export default function InstallmentsPage() {
                 <Field label="المبلغ" hint="ينفع قسط كامل، أو جزء، أو أكتر من قسط — بيتوزع على الأقدم أولاً">
                   <Input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder={String(selected.overdue.amount || (nextDue ? nextDue.amount - nextDue.paid : 0))} className="num text-lg font-semibold" />
                 </Field>
-                <Segmented value={method} onChange={setMethod} options={[{ value: "cash", label: "كاش" }, { value: "vodafone_cash", label: "فودافون كاش" }]} className="w-full" />
+                <Segmented value={method} onChange={setMethod} options={[{ value: "cash", label: "نقدي" }, { value: "vodafone_cash", label: "فودافون كاش" }]} className="w-full" />
                 <Button
                   size="lg"
                   className="w-full"
-                  disabled={!Number(amount) || Number(amount) > selected.remaining}
+                  disabled={!(Number(amount) > 0) || Number(amount) > selected.remaining}
                   onClick={() => {
                     payInstallment(selected.plan.id, Number(amount), method);
                     setDone(Number(amount));

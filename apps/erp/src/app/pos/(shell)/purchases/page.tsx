@@ -236,7 +236,7 @@ function ReceiveForm({ onOpenInvoice }: { onOpenInvoice: (id: string) => void })
   const pieces = checked.reduce((a, c) => a + c.count, 0);
   const paidNum = Number(paid) || 0;
   const lineOk = (c: (typeof checked)[number]) => c.product && c.count > 0 && Number(c.line.cost) > 0 && c.imeis.every((x) => !x.problem);
-  const valid = supplierId && checked.length > 0 && checked.every(lineOk) && paidNum <= total;
+  const valid = supplierId && checked.length > 0 && checked.every(lineOk) && paidNum >= 0 && paidNum <= total;
   const supplierName = (id: string) => contacts.find((c) => c.id === id)?.name ?? "—";
 
   function submit() {

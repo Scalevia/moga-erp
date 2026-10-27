@@ -103,6 +103,7 @@ export function profitByCategory(orders: Order[], movements: CashMovement[], mon
   for (const o of orders) {
     if (o.status !== "completed" || monthKey(o.createdAt) !== month) continue;
     for (const i of o.items) out[i.category] += i.qty * (i.unitPrice - i.unitCost);
+    if (o.extra) out[o.items[0].category] += o.extra; // extra the customer left goes with the main item
   }
   return out;
 }
@@ -113,7 +114,7 @@ export function cashCollected(orders: Order[], movements: CashMovement[], month:
   let sales = 0;
   for (const o of orders) {
     if (o.status !== "completed" || !inRange(o.createdAt)) continue;
-    for (const p of o.payments) if (p.method !== "installment") sales += p.amount;
+    for (const p of o.payments) if (p.method !== "installment" && p.method !== "credit") sales += p.amount;
   }
   const installments = movements
     .filter((m) => m.kind === "installment_collection" && inRange(m.createdAt))
@@ -248,6 +249,10 @@ export function dayReport(orders: Order[], movements: CashMovement[], day: strin
       c.qty += i.qty;
       c.sales += i.qty * i.unitPrice;
       c.profit += i.qty * (i.unitPrice - i.unitCost);
+    }
+    if (o.extra) {
+      byCategory[o.items[0].category].sales += o.extra;
+      byCategory[o.items[0].category].profit += o.extra;
     }
     const e = (byEmployee[o.employeeId] ??= { invoices: 0, sales: 0, discount: 0, profit: 0 });
     e.invoices += 1;

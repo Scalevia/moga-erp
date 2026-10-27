@@ -200,7 +200,7 @@ function RepriceModal({ productId, onClose, onDone }: { productId: string; onClo
           </div>
         )}
 
-        <Button className="w-full" disabled={p <= 0 || (qty > 0 && cost === "")} onClick={save}>
+        <Button className="w-full" disabled={p <= 0 || (qty > 0 && (cost === "" || c < 0))} onClick={save}>
           حفظ
         </Button>
       </div>

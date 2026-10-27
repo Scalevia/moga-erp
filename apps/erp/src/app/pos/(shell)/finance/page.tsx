@@ -104,7 +104,14 @@ export default function FinancePage() {
   const lentTarget = openLent.find((l) => l.id === target);
   const loanTarget = openLoans.find((l) => l.id === target);
   const overLimit = kind === "lent_out" && !isAdmin && Number(amount) > store.settings.employeeLendLimit;
-  const repayMax = kind === "lent_repaid" && lentTarget ? lentRemaining(lentTarget) : kind === "loan_repayment" && loanTarget ? loanRemaining(loanTarget) : Infinity;
+  const repayMax =
+    kind === "lent_repaid" && lentTarget
+      ? lentRemaining(lentTarget)
+      : kind === "loan_repayment" && loanTarget
+        ? loanRemaining(loanTarget)
+        : kind === "supplier_payment" && target
+          ? Math.max(0, store.supplierPayables[target] ?? 0)
+          : Infinity;
   const overRepay = Number(amount) > repayMax;
 
   function submit() {
@@ -226,7 +233,7 @@ export default function FinancePage() {
                 <Field label="المورد">
                   <Select value={target} onChange={(e) => setTarget(e.target.value)}>
                     <option value="">اختار…</option>
-                    {suppliers.map((s) => <option key={s.id} value={s.id}>{s.name} — عليه {(store.supplierPayables[s.id] ?? 0).toLocaleString("en")}</option>)}
+                    {suppliers.map((s) => <option key={s.id} value={s.id}>{s.name} — ليه {(store.supplierPayables[s.id] ?? 0).toLocaleString("en")}</option>)}
                   </Select>
                 </Field>
               )}
@@ -298,7 +305,7 @@ export default function FinancePage() {
                     <span className="text-bad">أكتر من {store.settings.employeeLendLimit.toLocaleString("en")} محتاج المالك يسجّلها</span>
                   ) : overRepay ? (
                     <span className="text-bad">
-                      {kind === "lent_repaid" ? "أكتر من اللي عليه" : "أكتر من اللي على المحل له"} ({repayMax.toLocaleString("en")})
+                      {kind === "lent_repaid" ? "أكتر من اللي عليه" : kind === "supplier_payment" ? "أكتر من اللي ليه" : "أكتر من اللي على المحل له"} ({repayMax.toLocaleString("en")})
                     </span>
                   ) : kind === "lent_out" && !isAdmin ? (
                     `الحد الأقصى ليك ${store.settings.employeeLendLimit.toLocaleString("en")} ج.م`

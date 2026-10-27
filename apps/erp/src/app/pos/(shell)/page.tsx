@@ -204,7 +204,7 @@ export default function SalePage() {
               {cart.map((l) => {
                 const list = l.listPrice ?? l.unitPrice;
                 const lineDiscount = list - l.unitPrice;
-                const setPrice = (price: number) => setCart((c) => c.map((x) => (x === l ? { ...x, unitPrice: price } : x)));
+                const setPrice = (price: number) => setCart((c) => c.map((x) => (x === l ? { ...x, unitPrice: Math.max(0, price) } : x)));
                 const available = availableOf(l);
                 const lineOverStock = l.qty > available;
                 const atLoss = l.unitPrice < l.unitCost; // below what the item cost us
@@ -262,7 +262,7 @@ export default function SalePage() {
                         min={0}
                         value={lineDiscount > 0 ? lineDiscount : ""}
                         placeholder="0"
-                        onChange={(e) => setPrice(list - (Number(e.target.value) || 0))}
+                        onChange={(e) => setPrice(list - Math.max(0, Number(e.target.value) || 0))}
                         className="num text-end"
                         aria-label="الخصم"
                       />
@@ -271,7 +271,8 @@ export default function SalePage() {
                       <span className="mb-0.5 block text-[11px] text-ink-3">سعر البيع</span>
                       <Input
                         type="number"
-                        value={l.unitPrice}
+                        value={l.unitPrice || ""}
+                        placeholder="0"
                         onChange={(e) => setPrice(Number(e.target.value))}
                         className={cn("num text-end font-semibold", atLoss && "border-bad text-bad")}
                         aria-label="سعر البيع"

@@ -10,11 +10,12 @@ import type { BalanceId, LedgerKind } from "@/lib/types";
 
 type Op = Extract<LedgerKind, "vf_deposit" | "vf_withdrawal" | "topup_sale" | "wallet_liquidation">;
 
-const ops: { kind: Op; icon: typeof Coins; help: string; feeLabel: string }[] = [
-  { kind: "vf_deposit", icon: ArrowDownToLine, help: "الزبون بيدفع كاش وإنت بتحوّل له من محفظة المحل", feeLabel: "عمولة المحل" },
-  { kind: "vf_withdrawal", icon: ArrowUpFromLine, help: "الزبون بيحوّل لمحفظة المحل وإنت بتديله كاش", feeLabel: "عمولة المحل" },
-  { kind: "topup_sale", icon: BatteryCharging, help: "الزبون بيدفع كاش والرصيد بيتخصم من الماكينة — شحن الموبايلات من Air time، والفواتير والخدمات من رصيد فوري العام", feeLabel: "عمولة المحل" },
-  { kind: "wallet_liquidation", icon: RefreshCw, help: "سحب فلوس من المحفظة للدرج (تسييل) — الرسوم مصروف", feeLabel: "رسوم السحب" },
+// "المبلغ" means something different per operation, so each says exactly what to write.
+const ops: { kind: Op; icon: typeof Coins; help: string; amountLabel: string; feeLabel: string; feeHint: string }[] = [
+  { kind: "vf_deposit", icon: ArrowDownToLine, help: "الزبون بيدفع كاش وإنت بتحوّل له من محفظة المحل", amountLabel: "المبلغ اللي هيتحوّل للزبون", feeLabel: "عمولة المحل", feeHint: "الزبون بيدفعها زيادة على المبلغ" },
+  { kind: "vf_withdrawal", icon: ArrowUpFromLine, help: "الزبون بيحوّل لمحفظة المحل وإنت بتديله كاش", amountLabel: "المبلغ اللي الزبون حوّله للمحفظة", feeLabel: "عمولة المحل", feeHint: "بتتخصم من الكاش اللي بياخده" },
+  { kind: "topup_sale", icon: BatteryCharging, help: "الزبون بيدفع كاش والرصيد بيتخصم من الماكينة — شحن الموبايلات من Air time، والفواتير والخدمات من رصيد فوري العام", amountLabel: "اللي الزبون دفعه كله (شامل العمولة)", feeLabel: "عمولة المحل", feeHint: "جوه المبلغ اللي الزبون دفعه" },
+  { kind: "wallet_liquidation", icon: RefreshCw, help: "سحب فلوس من المحفظة للدرج (تسييل) — الرسوم مصروف", amountLabel: "المبلغ اللي اتسحب من المحفظة", feeLabel: "رسوم السحب", feeHint: "مصروف — بتتخصم من الكاش اللي دخل الدرج" },
 ];
 
 export default function ServicesPage() {
@@ -76,10 +77,10 @@ export default function ServicesPage() {
           />
         )}
         <div className="grid gap-3 sm:grid-cols-3">
-          <Field label="المبلغ">
+          <Field label={op.amountLabel}>
             <Input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} className="num text-lg font-semibold" />
           </Field>
-          <Field label={op.feeLabel}>
+          <Field label={op.feeLabel} hint={op.feeHint}>
             <Input type="number" value={fee} onChange={(e) => setFee(e.target.value)} className="num" />
           </Field>
           {kind !== "wallet_liquidation" && (
@@ -98,7 +99,8 @@ export default function ServicesPage() {
         <Button
           size="lg"
           className="mt-4 w-full"
-          disabled={!a}
+          // No negatives; the fee can't be more than the amount, except a deposit's fee which comes on top.
+          disabled={!(a > 0) || f < 0 || (kind !== "vf_deposit" && f > a)}
           onClick={() => {
             store.recordMovement({ kind, ...effect, ...(kind === "topup_sale" ? { machineId: balanceCompany[account], balanceId: account } : {}), description: phone ? `${ledgerLabel[kind]} — ${phone}` : ledgerLabel[kind] });
             setDone(`${ledgerLabel[kind]} ${a.toLocaleString("en")} ج.م`);

@@ -2,7 +2,7 @@
 
 import { RotateCcw, Search } from "lucide-react";
 import { useState } from "react";
-import { Badge, Button, Card, CardHeader, Input, Money, PageHeader } from "@/components/ui";
+import { Badge, Button, Card, CardHeader, Input, Money, PageHeader, Segmented } from "@/components/ui";
 import { dateTime, paymentLabel } from "@/lib/format";
 import { orderTotal, planRemaining, refundFor, useStore } from "@/lib/store";
 
@@ -15,6 +15,7 @@ export default function ReturnsPage() {
   const movements = useStore((s) => s.movements);
   const [q, setQ] = useState("");
   const [reason, setReason] = useState("");
+  const [via, setVia] = useState<"same" | "cash" | "wallet" | "bank">("same");
 
   const code = q.trim();
   // By IMEI: the phone may have been sold more than once (sold, returned or bought back, sold again) —
@@ -24,7 +25,7 @@ export default function ReturnsPage() {
   const order = byNumber ?? byImei.at(-1);
   const earlier = byImei.slice(0, -1);
   const customer = contacts.find((c) => c.id === order?.customerId);
-  const refund = order?.status === "completed" ? refundFor({ plans, movements }, order) : null;
+  const refund = order?.status === "completed" ? refundFor({ plans, movements, orders }, order, via === "same" ? undefined : via) : null;
 
   return (
     <div className="mx-auto max-w-2xl">
@@ -67,6 +68,12 @@ export default function ReturnsPage() {
               <Money value={orderTotal(order)} />
             </div>
           </div>
+          {order.returned && (
+            <div className="border-t border-border px-4 py-3 text-sm text-ink-2">
+              اترجعت {dateTime(order.returned.at)} · {employees.find((e) => e.id === order.returned!.by)?.name ?? ""}
+              <div>السبب: {order.returned.reason}</div>
+            </div>
+          )}
           {order.status === "completed" && refund && (
             <div className="space-y-3 border-t border-border p-4">
               <div className="rounded-lg border border-border p-3 text-sm">
@@ -82,6 +89,12 @@ export default function ReturnsPage() {
                     </dd>
                   </div>
                 </dl>
+                {refund.onAccount > 0 && (
+                  <p className="mt-2 rounded-md bg-warn-soft px-2.5 py-1.5 text-xs text-warn">
+                    <Money value={refund.onAccount} /> من الفاتورة كانت على حساب الزبون — هتتشال من حسابه
+                    {refund.fromAccount > 0 && <> (ومنها <Money value={refund.fromAccount} /> كان دفعها وهترجعله)</>}.
+                  </p>
+                )}
                 {refund.plan && (
                   <p className="mt-2 rounded-md bg-warn-soft px-2.5 py-1.5 text-xs text-warn">
                     بيعة تقسيط: المبلغ ده فيه المقدم{refund.installments > 0 && <> وأقساط اتدفعت <Money value={refund.installments} /></>}. خطة الأقساط هتتلغي، والباقي على الزبون (
@@ -89,11 +102,31 @@ export default function ReturnsPage() {
                   </p>
                 )}
               </div>
+              <div>
+                <span className="mb-1 block text-sm font-medium text-ink-2">رجّعت الفلوس إزاي؟</span>
+                <Segmented
+                  value={via}
+                  onChange={setVia}
+                  className="flex w-full flex-wrap [&>button]:flex-1"
+                  options={[
+                    { value: "same", label: "زي ما اتدفعت" },
+                    { value: "cash", label: "نقدي" },
+                    { value: "wallet", label: "فودافون كاش" },
+                    { value: "bank", label: "إنستاباي" },
+                  ]}
+                />
+              </div>
               <Input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="سبب المرتجع (مطلوب)" />
-              <Button variant="danger" size="lg" className="w-full" disabled={!reason} onClick={() => returnOrder(order.id)}>
+              <Button
+                variant="danger"
+                size="lg"
+                className="w-full"
+                disabled={!reason.trim()}
+                onClick={() => returnOrder(order.id, { reason: reason.trim(), via: via === "same" ? undefined : via })}
+              >
                 <RotateCcw size={18} /> تأكيد المرتجع ورد الفلوس
               </Button>
-              <p className="text-xs text-ink-3">الأجهزة هترجع المخزن، والربح هيتلغي، والفلوس بترجع بنفس الطريقة اللي اتدفعت بيها. العملية بتتسجل باسمك.</p>
+              <p className="text-xs text-ink-3">الأجهزة هترجع المخزن، والربح هيتلغي، والفلوس بتطلع من المكان اللي فوق. العملية بتتسجل باسمك.</p>
             </div>
           )}
         </Card>

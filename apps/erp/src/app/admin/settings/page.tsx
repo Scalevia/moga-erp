@@ -4,7 +4,9 @@ import { CheckCircle2, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { Logo } from "@/components/logo";
 import { Button, Card, CardHeader, Field, Input, Textarea } from "@/components/ui";
+import { machineIds, machineLabel } from "@/lib/format";
 import { useStore } from "@/lib/store";
+import type { MachineId } from "@/lib/types";
 
 export default function SettingsPage() {
   const settings = useStore((s) => s.settings);
@@ -34,6 +36,7 @@ export default function SettingsPage() {
     airtimeBonus: String(airtimeBonus),
   });
   const [saved, setSaved] = useState(false);
+  const [agentPhones, setAgentPhones] = useState<Partial<Record<MachineId, string>>>(settings.agentPhones ?? {});
   const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     setF({ ...f, [k]: e.target.value });
     setSaved(false);
@@ -50,6 +53,7 @@ export default function SettingsPage() {
       usedWarrantyDays: Number(f.usedWarrantyDays) || 0,
       agentVfFeePercent: Number(f.agentVfFeePercent) || 0,
       employeeLendLimit: Number(f.employeeLendLimit) || 0,
+      agentPhones: Object.fromEntries(machineIds.map((id) => [id, (agentPhones[id] ?? "").trim()])),
     });
     setBonusPercent("fawry_airtime", Number(f.airtimeBonus) || 0);
     const cleaned = services.map((s) => ({ ...s, name: s.name.trim() })).filter((s) => s.name);
@@ -122,6 +126,25 @@ export default function SettingsPage() {
           <Button size="sm" variant="secondary" onClick={addService}>
             <Plus size={14} /> خدمة جديدة
           </Button>
+        </div>
+      </Card>
+
+      <Card>
+        <CardHeader title="أرقام المناديب" subtitle="بيظهر جنب كل مندوب زرار اتصال" />
+        <div className="space-y-3 p-4">
+          {machineIds.map((id) => (
+            <Field key={id} label={`مندوب ${machineLabel[id]}`}>
+              <Input
+                value={agentPhones[id] ?? ""}
+                onChange={(e) => {
+                  setAgentPhones({ ...agentPhones, [id]: e.target.value });
+                  setSaved(false);
+                }}
+                className="num"
+                placeholder="01xxxxxxxxx"
+              />
+            </Field>
+          ))}
         </div>
       </Card>
 
