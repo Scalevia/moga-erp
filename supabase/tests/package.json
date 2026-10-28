@@ -4,7 +4,7 @@
   "type": "module",
   "description": "Runs the database migrations on a local Postgres (PGlite) and checks every server operation.",
   "scripts": {
-    "test": "node operations.test.mjs"
+    "test": "node operations.test.mjs && node server-check.mjs"
   },
   "devDependencies": {
     "@electric-sql/pglite": "0.5.8"

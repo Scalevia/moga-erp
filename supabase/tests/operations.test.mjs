@@ -323,6 +323,7 @@ const bought = await one(`select * from public.phone_units where imei = '3560000
 ok("bought back: same IMEI, used, in stock, own price, earlier sale kept",
   bought.status === "in_stock" && bought.condition === "used" && N(bought.retail_price) === 25000 && bought.product_id === usedProduct && bought.past_order_ids.includes(s4.id) && bought.sold_order_id === null);
 ok("seller is the same customer (by phone), national ID filled in", (await one(`select count(*)::int as n, max(national_id) as nid from public.contacts where kind = 'customer' and phone = '01700000001'`)).nid === "29801011234567");
+await expectFail("a delivery can't bring in used phones", "receive_delivery", { p_supplier_id: phones, p_lines: [{ product_id: usedProduct, imeis: ["356000000000077"], unit_cost: 10000 }] }, "شراء مستعمل");
 
 // ---------------------------------------------------------------- returns
 await expectFail("return needs a reason", "return_order", { p_order_id: s1.id, p_reason: "  " }, "اكتب سبب المرتجع");
@@ -334,6 +335,7 @@ ok("cash sale returned: 750 back from the drawer, stock 9 → 10", N(back.cash) 
 const o1 = await one(`select status, return_reason, returned_by from public.orders where id = $1`, [s1.id]);
 ok("invoice marked returned with the reason and who did it", o1.status === "returned" && o1.return_reason === "العميل غيّر رأيه" && o1.returned_by === mohamedId);
 await expectFail("can't return twice", "return_order", { p_order_id: s1.id, p_reason: "تاني" }, "اترجعت قبل كده");
+await expectFail("no refund preview for a returned invoice", "refund_preview", { p_order_id: s1.id }, "اترجعت قبل كده");
 await expectFail("can't return a phone the shop has since bought back", "return_order", { p_order_id: s4.id, p_reason: "عطل" }, "اتشرى تاني");
 
 back = await rpc("return_order", { p_order_id: s3.id, p_reason: "مقاس غلط" });
