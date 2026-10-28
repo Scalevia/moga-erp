@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangle, ArrowDownRight, ArrowUpRight, CalendarClock, HandCoins, HandHelping, PackageMinus, TrendingDown } from "lucide-react";
+import { AlertTriangle, ArrowDownRight, ArrowUpRight, CalendarClock, ChevronLeft, ClipboardList, HandCoins, HandHelping, PackageMinus, TrendingDown } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 import { CategoryBars, RevenueProfitChart } from "@/components/admin/charts";
@@ -14,10 +14,10 @@ const serviceLabel: Record<ServiceCategory, string> = {
   momkn: "عمولات ممكن",
   installments: "أرباح التقسيط (الزيادة المحصّلة)",
 };
-import { balanceIds, balanceLabel, categoryLabel, dateTime, machineIds, machineLabel, pct, sinceDays } from "@/lib/format";
+import { balanceIds, balanceLabel, categoryLabel, dateTime, machineIds, machineLabel, pct, sinceDays, time } from "@/lib/format";
 import { drawerCash } from "@/lib/capital";
-import { closingDiffs, describeDiffs, openingDiffs } from "@/lib/shifts";
-import { daysSince, lentOverdueDays, lentRemaining, machineBalance, planOverdue, repBalance, repUnpaidSince, useStore, walletBalance } from "@/lib/store";
+import { closingDiffs, describeDiffs, openingDiffs, shiftReport } from "@/lib/shifts";
+import { currentShift, daysSince, lentOverdueDays, lentRemaining, machineBalance, planOverdue, repBalance, repUnpaidSince, useStore, walletBalance } from "@/lib/store";
 
 export default function Dashboard() {
   const store = useStore();
@@ -68,6 +68,8 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-4">
+      <OpenShiftCard />
+
       <section>
         <h2 className="mb-2 text-sm font-semibold text-ink-3">النهارده</h2>
         <div className="grid grid-cols-3 gap-2">
@@ -325,5 +327,33 @@ function Balance({ label, value, sub }: { label: string; value: number; sub?: st
       <Money value={value} className="mt-1 block text-lg font-bold" />
       {sub && <div className="text-[11px] text-ink-3">{sub}</div>}
     </div>
+  );
+}
+
+/** The shift that's open right now, with its numbers so far — tap for everything that happened in it. */
+function OpenShiftCard() {
+  const store = useStore();
+  const shift = currentShift(store);
+  if (!shift)
+    return (
+      <Link href="/admin/reports/shifts" className="flex items-center gap-3 rounded-xl border border-border bg-surface p-4 text-sm">
+        <ClipboardList size={18} className="shrink-0 text-ink-3" />
+        <span className="flex-1 text-ink-2">مفيش وردية مفتوحة دلوقتي</span>
+        <span className="text-xs text-brand">كل الورديات</span>
+      </Link>
+    );
+  const r = shiftReport(store, shift);
+  const who = store.staff.find((e) => e.id === shift.employeeId)?.name ?? "—";
+  return (
+    <Link href={`/admin/reports/shifts/${shift.id}`} className="flex items-center gap-3 rounded-xl border border-brand/30 bg-brand-soft p-4">
+      <ClipboardList size={20} className="shrink-0 text-brand" />
+      <span className="min-w-0 flex-1">
+        <span className="block font-semibold text-brand">الوردية المفتوحة: {who}</span>
+        <span className="block text-xs text-ink-2">
+          من {time(shift.openedAt)} · {r.orders.length} فاتورة · مبيعات <Money value={r.sales} /> · في الدرج <Money value={r.cashNow} />
+        </span>
+      </span>
+      <ChevronLeft size={18} className="shrink-0 text-brand" />
+    </Link>
   );
 }

@@ -68,6 +68,20 @@ export function dateTime(iso: string): string {
   return `${date(iso)} · ${time(iso)}`;
 }
 
+const weekdayDateFmt = new Intl.DateTimeFormat("ar-EG-u-nu-latn", { weekday: "long", day: "numeric", month: "long", timeZone: "Africa/Cairo" });
+
+/** "الثلاثاء 28 أكتوبر" */
+export function weekdayDate(iso: string): string {
+  return weekdayDateFmt.format(new Date(iso));
+}
+
+const cairoHourFmt = new Intl.DateTimeFormat("en-GB", { hour: "numeric", hourCycle: "h23", timeZone: "Africa/Cairo" });
+
+/** "صباح الخير" before noon in Cairo, "مساء الخير" after. */
+export function greeting(now = new Date()): string {
+  return Number(cairoHourFmt.format(now)) < 12 ? "صباح الخير" : "مساء الخير";
+}
+
 export const categoryLabel: Record<ProductCategory, string> = {
   new_phone: "موبايل جديد",
   used_phone: "موبايل مستعمل",

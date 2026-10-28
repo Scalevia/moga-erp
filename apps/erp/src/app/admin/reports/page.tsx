@@ -4,6 +4,7 @@ import { ChevronLeft, ChevronRight, Download, RotateCcw } from "lucide-react";
 import { useState } from "react";
 import { Badge, Card, CardHeader, Money, cn } from "@/components/ui";
 import { dailySummaries, dayExpenses, dayKey, dayReport, monthExpenses, monthKey, monthRevaluation, toCsv, type DaySummary, type ServiceCategory } from "@/lib/analytics";
+import { ReportsTabs } from "@/components/reports-tabs";
 import { StockPriceLine } from "@/components/stock-price-line";
 import { itemCategoryLabel, num, paymentLabel, time } from "@/lib/format";
 import { openingDiffs } from "@/lib/shifts";
@@ -53,10 +54,15 @@ export default function ReportsPage() {
     window.scrollTo({ top: 0 });
   };
 
-  return day ? (
-    <DayView day={day} today={today} onChange={openDay} onBack={() => openDay(null)} />
-  ) : (
-    <MonthView month={month} today={today} onMonth={setMonth} onDay={openDay} />
+  return (
+    <>
+      <ReportsTabs active="sales" />
+      {day ? (
+        <DayView day={day} today={today} onChange={openDay} onBack={() => openDay(null)} />
+      ) : (
+        <MonthView month={month} today={today} onMonth={setMonth} onDay={openDay} />
+      )}
+    </>
   );
 }
 

@@ -1,10 +1,10 @@
 "use client";
 
-import { BellRing, CheckCircle2, ClipboardList, Plus, Sunrise } from "lucide-react";
+import { BellRing, CheckCircle2, ClipboardList, PlayCircle, Plus, Sunrise } from "lucide-react";
 import { useState } from "react";
 import { Badge, Button, Card, CardHeader, Money, cn } from "@/components/ui";
 import { dayKey } from "@/lib/analytics";
-import { balanceIds, balanceLabel, balancesOf, dateTime, machineIds, machineLabel, sinceDays, time } from "@/lib/format";
+import { balanceIds, balanceLabel, balancesOf, dateTime, dayMonth, greeting, machineIds, machineLabel, sinceDays, time, weekdayDate } from "@/lib/format";
 import { daysSince, lastClosedShift, machineBalance, repBalance, repUnpaidSince, useStore, walletBalance } from "@/lib/store";
 import { AgentLoadForm } from "./agents";
 import type { BalanceId, CashMovement } from "@/lib/types";
@@ -22,6 +22,7 @@ export function OpenDay() {
   const last = lastClosedShift(store);
   const firstOfDay = !last?.closedAt || dayKey(last.closedAt) !== dayKey(new Date().toISOString());
   const lastBy = employees.find((e) => e.id === last?.employeeId)?.name;
+  const me = employees.find((e) => e.id === store.currentEmployeeId);
 
   const [cash, setCash] = useState("");
   const [balances, setBalances] = useState(emptyBalances);
@@ -30,6 +31,9 @@ export function OpenDay() {
   // refresh still lists them and nobody records the same load twice.
   const loads = store.movements.filter((m) => m.kind === "rep_load" && m.shiftId === "none" && (!last?.closedAt || m.createdAt > last.closedAt));
   const [agentCame, setAgentCame] = useState<boolean | null>(() => (loads.length > 0 ? true : null));
+  // First a clear "new day / new shift" screen with one button; the counting steps come after.
+  // Loads already recorded mean the steps were started, so they open straight away.
+  const [started, setStarted] = useState(() => loads.length > 0);
   const [addingLoad, setAddingLoad] = useState(false);
   // Agents still waiting to be paid from before — e.g. a load left unpaid over a holiday. This morning's loads are listed below instead.
   const owedAgents = machineIds
@@ -62,6 +66,44 @@ export function OpenDay() {
     wallet: walletBalance(store),
     machines: Object.fromEntries(balanceIds.map((id) => [id, machineBalance(store, id)])) as Record<BalanceId, number>,
   };
+
+  if (!started) {
+    const now = new Date().toISOString();
+    const lastClose = last?.closedAt;
+    const when = lastClose ? (dayKey(lastClose) === dayKey(now) ? "النهارده" : dayKey(lastClose) === dayKey(new Date(Date.parse(now) - 86400000).toISOString()) ? "امبارح" : dayMonth(lastClose)) : "";
+    return (
+      <div className="mx-auto flex min-h-[70vh] max-w-md flex-col items-center justify-center text-center">
+        <div className="mb-5 flex h-16 w-16 items-center justify-center rounded-2xl bg-brand-soft text-brand">
+          {firstOfDay ? <Sunrise size={32} /> : <ClipboardList size={32} />}
+        </div>
+        <h1 className="text-2xl font-bold">
+          {greeting()} يا {me?.name.split(" ")[0] ?? ""}
+        </h1>
+        <p className="mt-1 text-ink-2">{weekdayDate(now)}</p>
+        <div className="mt-5 w-full rounded-xl bg-surface-2 px-4 py-3 text-sm text-ink-2">
+          {firstOfDay ? (
+            <>
+              <div className="font-semibold text-ink">يوم جديد — مفيش وردية مفتوحة</div>
+              {lastClose && (
+                <div className="mt-0.5 text-xs text-ink-3">
+                  آخر وردية قفلها {lastBy} {when} الساعة {time(lastClose)}
+                </div>
+              )}
+            </>
+          ) : (
+            <>
+              <div className="font-semibold text-ink">وردية {lastBy} اتقفلت</div>
+              <div className="mt-0.5 text-xs text-ink-3">{when} الساعة {time(lastClose!)} — دورك تستلم</div>
+            </>
+          )}
+        </div>
+        <Button size="lg" className="mt-6 w-full" onClick={() => setStarted(true)}>
+          <PlayCircle size={20} /> {firstOfDay ? "فتح وردية جديدة" : `استلام الوردية من ${lastBy}`}
+        </Button>
+        <p className="mt-3 text-xs text-ink-3">هتعدّ الدرج والمحافظ والماكينات، وبعدها الوردية تتفتح باسمك</p>
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto max-w-5xl">
