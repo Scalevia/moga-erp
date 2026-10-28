@@ -96,7 +96,8 @@ begin
   -- The whole check runs in one transaction, so everything in it has the same time. The setup happens
   -- before the first shift in real life: move it an hour back, so "the last closed shift" stays clear.
   execute 'reset role';
-  update public.shifts set opened_at = opened_at - interval '1 hour', closed_at = closed_at - interval '1 hour';
+  update public.shifts set opened_at = opened_at - interval '1 hour', closed_at = closed_at - interval '1 hour'
+   where closed_at is not null;
   execute 'set local role authenticated';
 
   -- ---------------------------------------------------------------- the day starts (employee)
