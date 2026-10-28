@@ -37,9 +37,9 @@ function makeImei(): string {
 }
 
 export const initialStaff: Employee[] = [
-  { id: "emp-owner", name: "المالك", role: "admin", salary: 0, active: true },
-  { id: "emp-1", name: "محمد سامي", role: "employee", phone: "01011111111", salary: 6000, active: true },
-  { id: "emp-2", name: "كريم عادل", role: "employee", phone: "01022222222", salary: 5500, active: true },
+  { id: "emp-owner", name: "المالك", role: "admin", salary: 0, active: true, username: "owner", password: "1234" },
+  { id: "emp-1", name: "محمد سامي", role: "employee", phone: "01011111111", salary: 6000, active: true, username: "mohamed", password: "1111" },
+  { id: "emp-2", name: "كريم عادل", role: "employee", phone: "01022222222", salary: 5500, active: true, username: "karim", password: "2222" },
 ];
 
 export const initialSettings: ShopSettings = {

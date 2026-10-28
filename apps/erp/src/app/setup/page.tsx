@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { AgentsStep, InstallmentsStep, LendersStep, MoneyStep, ProductsStep, SuppliersStep } from "@/components/setup/steps";
 import { Badge, Button, Card, CardHeader, Input, Modal, Money, cn, useHydrated } from "@/components/ui";
 import { balanceIds, machineIds } from "@/lib/format";
@@ -32,10 +32,16 @@ const steps: { id: StepId; title: string; help: string; icon: typeof Wallet }[] 
 
 export default function SetupPage() {
   const hydrated = useHydrated();
+  const router = useRouter();
   const [step, setStep] = useState<StepId>("money");
   const draft = useSetupDraft((s) => s.draft);
+  // Setting up the shop replaces all its data — owner only.
+  const isOwner = useStore((s) => s.staff.find((e) => e.id === s.currentEmployeeId)?.role === "admin");
+  useEffect(() => {
+    if (hydrated && !isOwner) router.replace("/");
+  }, [hydrated, isOwner, router]);
 
-  if (!hydrated) return null;
+  if (!hydrated || !isOwner) return null;
 
   const issues = validate(draft);
   const idx = steps.findIndex((s) => s.id === step);
@@ -246,7 +252,7 @@ function Review({ onGoTo }: { onGoTo: (s: StepId) => void }) {
             onClick={() => {
               initializeShop(buildInitData(draft, owner.id));
               clear();
-              router.push("/pos/login");
+              router.push("/");
             }}
           >
             بدء التشغيل

@@ -58,6 +58,9 @@ export default function StaffPage() {
                       <div className="flex flex-wrap items-center gap-1.5 text-xs text-ink-3">
                         {e.role === "admin" ? <Badge tone="brand">مالك</Badge> : <Badge>موظف</Badge>}
                         {!e.active && <Badge tone="bad">متوقف</Badge>}
+                        <span>
+                          دخول <span className="num">{e.username}</span>
+                        </span>
                         {e.phone && <span className="num">{e.phone}</span>}
                         {e.salary > 0 && (
                           <span>
@@ -166,9 +169,14 @@ function EmployeeForm({ employee, onClose }: { employee: Employee | null; onClos
   const [phone, setPhone] = useState(employee?.phone ?? "");
   const [role, setRole] = useState<Role>(employee?.role ?? "employee");
   const [salary, setSalary] = useState(employee ? String(employee.salary) : "");
+  const [username, setUsername] = useState(employee?.username ?? "");
+  const [password, setPassword] = useState(""); // empty while editing = keep the current one
 
   const lastAdmin = employee?.role === "admin" && employee.active && staff.filter((e) => e.role === "admin" && e.active).length === 1;
-  const valid = name.trim().length > 0;
+  const user = username.trim().toLowerCase();
+  const userTaken = !!user && staff.some((e) => e.id !== employee?.id && e.username.toLowerCase() === user);
+  const passwordOk = employee ? password === "" || password.length >= 4 : password.length >= 4;
+  const valid = name.trim().length > 0 && !!user && !userTaken && passwordOk;
 
   return (
     <Modal open onClose={onClose} title={employee ? `تعديل ${employee.name}` : "موظف جديد"} width="max-w-sm">
@@ -191,6 +199,14 @@ function EmployeeForm({ employee, onClose }: { employee: Employee | null; onClos
           />
           {lastAdmin && <p className="mt-1 text-xs text-ink-3">ده المالك الوحيد — لازم يفضل مالك</p>}
         </div>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="اسم المستخدم" hint={userTaken ? <span className="text-bad">مستخدم لموظف تاني</span> : "للدخول للبرنامج"}>
+            <Input value={username} onChange={(e) => setUsername(e.target.value.replace(/\s/g, ""))} autoCapitalize="none" autoComplete="off" className="num" dir="ltr" />
+          </Field>
+          <Field label="كلمة السر" hint={employee ? "سيبها فاضية لو مش هتغيّرها" : "4 حروف أو أرقام على الأقل"}>
+            <Input value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="new-password" className="num" dir="ltr" />
+          </Field>
+        </div>
         <Field label="المرتب الشهري">
           <Input type="number" value={salary} onChange={(e) => setSalary(e.target.value)} className="num" placeholder="0" />
         </Field>
@@ -198,9 +214,9 @@ function EmployeeForm({ employee, onClose }: { employee: Employee | null; onClos
           className="w-full"
           disabled={!valid}
           onClick={() => {
-            const data = { name: name.trim(), phone: phone.trim() || undefined, role, salary: Number(salary) || 0 };
-            if (employee) updateEmployee(employee.id, data);
-            else addEmployee(data);
+            const data = { name: name.trim(), phone: phone.trim() || undefined, role, salary: Number(salary) || 0, username: user };
+            if (employee) updateEmployee(employee.id, { ...data, ...(password ? { password } : {}) });
+            else addEmployee({ ...data, password });
             onClose();
           }}
         >

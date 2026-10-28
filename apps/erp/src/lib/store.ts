@@ -147,7 +147,7 @@ interface State {
     via: "cash" | "wallet" | "bank";
   }) => PurchaseInvoice;
   addEmployee: (input: Omit<Employee, "id" | "active">) => string;
-  updateEmployee: (id: string, patch: Partial<Pick<Employee, "name" | "phone" | "salary" | "role" | "active">>) => void;
+  updateEmployee: (id: string, patch: Partial<Pick<Employee, "name" | "phone" | "salary" | "role" | "active" | "username" | "password">>) => void;
   deleteEmployee: (id: string) => void;
   updateSettings: (patch: Partial<ShopSettings>) => void;
   setServices: (list: ShopService[]) => void;
@@ -723,7 +723,7 @@ export const useStore = create<State>()(
       };
     },
     {
-      name: "moga-demo-v17",
+      name: "moga-demo-v18",
       storage: idbStorage,
     },
   ),

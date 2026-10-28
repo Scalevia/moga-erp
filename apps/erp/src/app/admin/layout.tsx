@@ -1,11 +1,13 @@
 "use client";
 
-import { Boxes, FileBarChart, Home, Landmark, ScanSearch, Settings, Users, Wallet } from "lucide-react";
+import { Boxes, FileBarChart, Home, Landmark, LogOut, ScanSearch, Settings, Users, Wallet } from "lucide-react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { useEffect } from "react";
 import { LogoIcon } from "@/components/logo";
 import { DemoNotice } from "@/components/setup-entry";
 import { cn, useHydrated } from "@/components/ui";
+import { useStore } from "@/lib/store";
 
 const tabs = [
   { href: "/admin", label: "الرئيسية", icon: Home },
@@ -19,8 +21,15 @@ const tabs = [
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
   const hydrated = useHydrated();
-  if (!hydrated) return null;
+  const logout = useStore((s) => s.logout);
+  // Owner only: anyone else (or nobody signed in) goes back to the login page.
+  const isOwner = useStore((s) => s.staff.find((e) => e.id === s.currentEmployeeId)?.role === "admin");
+  useEffect(() => {
+    if (hydrated && !isOwner) router.replace("/");
+  }, [hydrated, isOwner, router]);
+  if (!hydrated || !isOwner) return null;
   return (
     <div className="mx-auto min-h-screen max-w-2xl pb-24">
       <header className="sticky top-0 z-20 flex items-center justify-between border-b border-border bg-bg/90 px-4 py-3 backdrop-blur">
@@ -35,6 +44,17 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           <Link href="/admin/settings" className={cn("rounded-lg p-2 hover:bg-surface-2", pathname.startsWith("/admin/settings") ? "text-brand" : "text-ink-2")} aria-label="الإعدادات">
             <Settings size={18} />
           </Link>
+          <button
+            onClick={() => {
+              logout();
+              router.push("/");
+            }}
+            className="rounded-lg p-2 text-ink-2 hover:bg-surface-2"
+            aria-label="خروج"
+            title="خروج"
+          >
+            <LogOut size={18} />
+          </button>
         </div>
       </header>
       <main className="px-4 pt-4">

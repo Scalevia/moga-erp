@@ -152,7 +152,7 @@ function ShiftResult({ shift }: { shift: Shift }) {
         <Button
           onClick={() => {
             store.logout();
-            router.push("/pos/login");
+            router.push("/");
           }}
         >
           تسليم الوردية لموظف تاني

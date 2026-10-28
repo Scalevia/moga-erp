@@ -66,7 +66,7 @@ export default function PosShell({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!hydrated) return;
     if (blocked) logout();
-    if (!employeeId || blocked) router.replace("/pos/login");
+    if (!employeeId || blocked) router.replace("/");
   }, [hydrated, employeeId, blocked, logout, router]);
 
   if (!hydrated || !employee || blocked) return null;
@@ -182,7 +182,7 @@ function SidebarContent({ employee, shift, pathname }: { employee: Employee; shi
             title="تبديل الموظف"
             onClick={() => {
               logout();
-              router.push("/pos/login");
+              router.push("/");
             }}
             className="rounded-md p-1.5 text-ink-3 hover:bg-border hover:text-ink"
           >

@@ -10,6 +10,9 @@ export interface Employee {
   phone?: string;
   salary: number; // monthly
   active: boolean; // deactivated employees can't log in but keep their history
+  // Sign-in for the prototype only: kept in the browser. Moves to Supabase Auth (hashed, server-checked).
+  username: string;
+  password: string;
 }
 
 /** Owner-editable settings (shown on the receipt and used in calculations). */
