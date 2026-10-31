@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { IBM_Plex_Sans_Arabic } from "next/font/google";
+import { LiveSession } from "@/components/live-session";
 import "./globals.css";
 
 const arabic = IBM_Plex_Sans_Arabic({
@@ -22,7 +23,10 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="ar" dir="rtl" className={`${arabic.variable} h-full antialiased`}>
-      <body className="min-h-full font-sans">{children}</body>
+      <body className="min-h-full font-sans">
+        <LiveSession />
+        {children}
+      </body>
     </html>
   );
 }

@@ -5,7 +5,9 @@ import { useState } from "react";
 import { Badge, Button, Card, CardHeader, Field, Input, Modal, Money, Segmented, cn } from "@/components/ui";
 import { monthKey } from "@/lib/analytics";
 import { dateTime } from "@/lib/format";
+import { loadStaff, staffAccounts } from "@/lib/session";
 import { currentShift, orderProfit, orderTotal, outstandingAdvances, useStore } from "@/lib/store";
+import { getSupabase, isLive } from "@/lib/supabase";
 import type { Employee, Role } from "@/lib/types";
 
 const monthFmt = new Intl.DateTimeFormat("ar-EG-u-nu-latn", { month: "long", year: "numeric", timeZone: "UTC" });
@@ -16,11 +18,55 @@ const shiftMonth = (month: string, by: number) => {
 };
 const viaLabel = { cash: "كاش من الدرج", wallet: "فودافون كاش", bank: "إنستاباي" } as const;
 
+// In the demo a change happens in the browser. With real accounts the server makes it (and refuses what it
+// must, like deleting someone with records), then the list reloads. Each returns what went wrong, if anything.
+
+async function reloadStaff() {
+  try {
+    await loadStaff(true);
+  } catch {
+    // the change is made; the list catches up next time the page opens
+  }
+}
+
+async function setActive(id: string, active: boolean): Promise<string | null> {
+  if (!isLive) {
+    useStore.getState().updateEmployee(id, { active });
+    return null;
+  }
+  const { error } = await getSupabase()!.rpc("update_staff", { p_id: id, p_active: active });
+  if (error) return error.message;
+  await reloadStaff();
+  return null;
+}
+
+async function removeEmployee(id: string): Promise<string | null> {
+  if (!isLive) {
+    useStore.getState().deleteEmployee(id);
+    return null;
+  }
+  const { error } = await staffAccounts({ action: "delete", staff_id: id });
+  if (error) return error;
+  await reloadStaff();
+  return null;
+}
+
 export default function StaffPage() {
   const store = useStore();
   const { staff } = store;
   const [editing, setEditing] = useState<Employee | "new" | null>(null);
   const [confirm, setConfirm] = useState<{ emp: Employee; action: "deactivate" | "delete" } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function run(action: Promise<string | null>) {
+    setBusy(true);
+    setError(null);
+    const problem = await action;
+    setBusy(false);
+    setError(problem);
+    return !problem;
+  }
 
   const activeAdmins = staff.filter((e) => e.role === "admin" && e.active).length;
   const hasRecords = (id: string) =>
@@ -43,9 +89,12 @@ export default function StaffPage() {
             </Button>
           }
         />
+        {error && !confirm && <p className="mx-4 mb-3 rounded-lg bg-bad-soft px-3 py-2 text-sm text-bad">{error}</p>}
         <ul className="divide-y divide-border">
           {sorted.map((e) => {
             const lastAdmin = e.role === "admin" && e.active && activeAdmins === 1;
+            // With real accounts the server checks for records (and nobody deletes themselves).
+            const canDelete = !lastAdmin && (isLive ? e.id !== store.currentEmployeeId : !hasRecords(e.id));
             return (
               <li key={e.id} className={cn("px-4 py-3", !e.active && "bg-surface-2")}>
                 <div className="flex items-start justify-between gap-3">
@@ -80,11 +129,11 @@ export default function StaffPage() {
                       إيقاف
                     </SmallAction>
                   ) : (
-                    <SmallAction onClick={() => store.updateEmployee(e.id, { active: true })} icon={<Power size={13} />}>
+                    <SmallAction onClick={() => void run(setActive(e.id, true))} icon={<Power size={13} />} disabled={busy}>
                       إعادة تفعيل
                     </SmallAction>
                   )}
-                  {!hasRecords(e.id) && !lastAdmin && (
+                  {canDelete && (
                     <SmallAction onClick={() => setConfirm({ emp: e, action: "delete" })} icon={<Trash2 size={13} />} danger>
                       حذف
                     </SmallAction>
@@ -102,25 +151,40 @@ export default function StaffPage() {
 
       {editing && <EmployeeForm employee={editing === "new" ? null : editing} onClose={() => setEditing(null)} />}
       {confirm && (
-        <Modal open onClose={() => setConfirm(null)} title={confirm.action === "delete" ? "حذف موظف" : "إيقاف موظف"} width="max-w-sm">
+        <Modal
+          open
+          onClose={() => {
+            setConfirm(null);
+            setError(null);
+          }}
+          title={confirm.action === "delete" ? "حذف موظف" : "إيقاف موظف"}
+          width="max-w-sm"
+        >
           <p className="mb-4 text-sm">
             {confirm.action === "delete"
               ? `${confirm.emp.name} ما سجّلش أي عملية، فهيتمسح نهائي.`
               : `${confirm.emp.name} مش هيظهر تاني في قايمة الموظفين عند فتح نقطة البيع، بس كل عملياته هتفضل في التقارير. تقدر ترجّعه في أي وقت.`}
           </p>
+          {error && <p className="mb-3 rounded-lg bg-bad-soft px-3 py-2 text-sm text-bad">{error}</p>}
           <div className="flex gap-2">
             <Button
               variant="danger"
               className="flex-1"
-              onClick={() => {
-                if (confirm.action === "delete") store.deleteEmployee(confirm.emp.id);
-                else store.updateEmployee(confirm.emp.id, { active: false });
-                setConfirm(null);
+              disabled={busy}
+              onClick={async () => {
+                const done = await run(confirm.action === "delete" ? removeEmployee(confirm.emp.id) : setActive(confirm.emp.id, false));
+                if (done) setConfirm(null);
               }}
             >
-              {confirm.action === "delete" ? "حذف" : "إيقاف"}
+              {busy ? "لحظة…" : confirm.action === "delete" ? "حذف" : "إيقاف"}
             </Button>
-            <Button variant="secondary" onClick={() => setConfirm(null)}>
+            <Button
+              variant="secondary"
+              onClick={() => {
+                setConfirm(null);
+                setError(null);
+              }}
+            >
               رجوع
             </Button>
           </div>
@@ -171,12 +235,37 @@ function EmployeeForm({ employee, onClose }: { employee: Employee | null; onClos
   const [salary, setSalary] = useState(employee ? String(employee.salary) : "");
   const [username, setUsername] = useState(employee?.username ?? "");
   const [password, setPassword] = useState(""); // empty while editing = keep the current one
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
 
   const lastAdmin = employee?.role === "admin" && employee.active && staff.filter((e) => e.role === "admin" && e.active).length === 1;
   const user = username.trim().toLowerCase();
   const userTaken = !!user && staff.some((e) => e.id !== employee?.id && e.username.toLowerCase() === user);
-  const passwordOk = employee ? password === "" || password.length >= 4 : password.length >= 4;
+  const minPassword = isLive ? 6 : 4; // Supabase Auth's minimum with real accounts
+  const passwordOk = employee ? password === "" || password.length >= minPassword : password.length >= minPassword;
   const valid = name.trim().length > 0 && !!user && !userTaken && passwordOk;
+
+  async function save() {
+    const data = { name: name.trim(), phone: phone.trim() || undefined, role, salary: Number(salary) || 0, username: user };
+    if (!isLive) {
+      if (employee) updateEmployee(employee.id, { ...data, ...(password ? { password } : {}) });
+      else addEmployee({ ...data, password });
+      return onClose();
+    }
+    // The sign-in lives in Supabase Auth: the staff-accounts Edge Function makes or changes it.
+    setBusy(true);
+    setError(null);
+    const fields = { name: data.name, role, phone: phone.trim(), salary: data.salary, username: user };
+    const result = await staffAccounts(
+      employee ? { action: "update", staff_id: employee.id, ...fields, password: password || undefined } : { action: "create", ...fields, password },
+    );
+    if (result.error) {
+      setBusy(false);
+      return setError(result.error);
+    }
+    await reloadStaff();
+    onClose();
+  }
 
   return (
     <Modal open onClose={onClose} title={employee ? `تعديل ${employee.name}` : "موظف جديد"} width="max-w-sm">
@@ -203,24 +292,16 @@ function EmployeeForm({ employee, onClose }: { employee: Employee | null; onClos
           <Field label="اسم المستخدم" hint={userTaken ? <span className="text-bad">مستخدم لموظف تاني</span> : "للدخول للبرنامج"}>
             <Input value={username} onChange={(e) => setUsername(e.target.value.replace(/\s/g, ""))} autoCapitalize="none" autoComplete="off" className="num" dir="ltr" />
           </Field>
-          <Field label="كلمة السر" hint={employee ? "سيبها فاضية لو مش هتغيّرها" : "4 حروف أو أرقام على الأقل"}>
+          <Field label="كلمة السر" hint={employee ? "سيبها فاضية لو مش هتغيّرها" : `${minPassword} حروف أو أرقام على الأقل`}>
             <Input value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="new-password" className="num" dir="ltr" />
           </Field>
         </div>
         <Field label="المرتب الشهري">
           <Input type="number" value={salary} onChange={(e) => setSalary(e.target.value)} className="num" placeholder="0" />
         </Field>
-        <Button
-          className="w-full"
-          disabled={!valid}
-          onClick={() => {
-            const data = { name: name.trim(), phone: phone.trim() || undefined, role, salary: Number(salary) || 0, username: user };
-            if (employee) updateEmployee(employee.id, { ...data, ...(password ? { password } : {}) });
-            else addEmployee({ ...data, password });
-            onClose();
-          }}
-        >
-          {employee ? "حفظ" : <><Plus size={16} /> إضافة الموظف</>}
+        {error && <p className="rounded-lg bg-bad-soft px-3 py-2 text-sm text-bad">{error}</p>}
+        <Button className="w-full" disabled={!valid || busy} onClick={save}>
+          {busy ? "لحظة…" : employee ? "حفظ" : <><Plus size={16} /> إضافة الموظف</>}
         </Button>
       </div>
     </Modal>

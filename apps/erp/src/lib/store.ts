@@ -50,6 +50,7 @@ import type {
   UsedInspection,
 } from "./types";
 import { balanceIds, balanceLabel, defaultServices } from "./format";
+import { isLive } from "./supabase";
 
 const uid = (p: string) => `${p}-${Math.random().toString(36).slice(2, 9)}`;
 const nowIso = () => new Date().toISOString();
@@ -126,6 +127,8 @@ interface State {
 
   login: (employeeId: string) => void;
   logout: () => void;
+  /** The staff list as the database has it (real accounts). */
+  setStaff: (list: Employee[]) => void;
   completeSale: (input: SaleInput) => Order;
   /** Return a whole order. `via` = the money went back another way than it was paid (all of it from there). */
   returnOrder: (orderId: string, input: { reason: string; via?: "cash" | "wallet" | "bank" }) => void;
@@ -179,6 +182,39 @@ interface State {
 }
 
 function initialState() {
+  return isLive ? liveState() : demoState();
+}
+
+/**
+ * With real accounts the staff list comes from the database; the rest starts empty here until the screens
+ * read the database too.
+ */
+function liveState(): ReturnType<typeof demoState> {
+  return {
+    ...demoState(),
+    products: [],
+    units: [],
+    contacts: [],
+    orders: [],
+    plans: [],
+    loans: [],
+    lentOut: [],
+    movements: [],
+    shifts: [],
+    nextOrderNo: 1,
+    supplierPayables: {},
+    walletOpening: 0,
+    machineOpening: { fawry_airtime: 0, fawry_general: 0, momkn: 0 },
+    repOpening: { fawry: 0, momkn: 0 },
+    extraOpening: { bank: 0, savings: 0, fixedAssets: 0 },
+    isDemo: false,
+    staff: [],
+    purchases: [],
+    payroll: [],
+  };
+}
+
+function demoState() {
   return {
     products: initialProducts,
     units: initialUnits,
@@ -266,6 +302,7 @@ export const useStore = create<State>()(
 
         login: (employeeId) => set({ currentEmployeeId: employeeId }),
         logout: () => set({ currentEmployeeId: null }),
+        setStaff: (list) => set({ staff: list }),
 
         completeSale: (input) => {
           const s = get();
@@ -723,7 +760,7 @@ export const useStore = create<State>()(
       };
     },
     {
-      name: "moga-demo-v18",
+      name: isLive ? "moga-live-v1" : "moga-demo-v18",
       storage: idbStorage,
     },
   ),

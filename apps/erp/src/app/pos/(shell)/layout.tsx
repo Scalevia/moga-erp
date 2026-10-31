@@ -26,6 +26,7 @@ import { OpenDay } from "@/components/pos/open-day";
 import { DemoNotice } from "@/components/setup-entry";
 import { cn, useHydrated } from "@/components/ui";
 import { balanceIds, time } from "@/lib/format";
+import { signOut, useSession } from "@/lib/session";
 import { currentShift, expectedCash, machineBalance, useStore, walletBalance } from "@/lib/store";
 import type { Employee, Shift } from "@/lib/types";
 
@@ -45,13 +46,13 @@ const nav = [
 
 export default function PosShell({ children }: { children: React.ReactNode }) {
   const hydrated = useHydrated();
+  const ready = useSession((s) => s.ready) && hydrated;
   const router = useRouter();
   const pathname = usePathname();
   const employeeId = useStore((s) => s.currentEmployeeId);
   const employees = useStore((s) => s.staff);
   const shift = useStore(currentShift);
   const employee = employees.find((e) => e.id === employeeId);
-  const logout = useStore((s) => s.logout);
   // One person works a shift: only whoever opened it — or the owner — can use the POS until it's closed.
   const blocked = !!shift && !!employee && employee.role !== "admin" && shift.employeeId !== employee.id;
   const [menuOpen, setMenuOpen] = useState(false);
@@ -64,12 +65,12 @@ export default function PosShell({ children }: { children: React.ReactNode }) {
   }
 
   useEffect(() => {
-    if (!hydrated) return;
-    if (blocked) logout();
+    if (!ready) return;
+    if (blocked) void signOut();
     if (!employeeId || blocked) router.replace("/");
-  }, [hydrated, employeeId, blocked, logout, router]);
+  }, [ready, employeeId, blocked, router]);
 
-  if (!hydrated || !employee || blocked) return null;
+  if (!ready || !employee || blocked) return null;
   const current = nav.find((n) => (n.href === "/pos" ? pathname === "/pos" : pathname.startsWith(n.href)));
   // Owner only: employees count the drawer, wallet and machines blind when opening and closing a shift.
   const showBalances = !!shift && employee.role === "admin";
@@ -141,7 +142,6 @@ function BalancesBar({ shift, className }: { shift: Shift; className?: string })
 
 function SidebarContent({ employee, shift, pathname }: { employee: Employee; shift?: Shift; pathname: string }) {
   const router = useRouter();
-  const logout = useStore((s) => s.logout);
   return (
     <>
       <div className="flex items-center gap-2 px-5 py-4">
@@ -180,8 +180,8 @@ function SidebarContent({ employee, shift, pathname }: { employee: Employee; shi
           </div>
           <button
             title="تبديل الموظف"
-            onClick={() => {
-              logout();
+            onClick={async () => {
+              await signOut();
               router.push("/");
             }}
             className="rounded-md p-1.5 text-ink-3 hover:bg-border hover:text-ink"

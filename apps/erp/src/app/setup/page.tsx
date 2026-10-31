@@ -17,6 +17,7 @@ import { useEffect, useState } from "react";
 import { AgentsStep, InstallmentsStep, LendersStep, MoneyStep, ProductsStep, SuppliersStep } from "@/components/setup/steps";
 import { Badge, Button, Card, CardHeader, Input, Modal, Money, cn, useHydrated } from "@/components/ui";
 import { balanceIds, machineIds } from "@/lib/format";
+import { useSession } from "@/lib/session";
 import { buildInitData, n, productCount, useSetupDraft, validate, type SetupDraft, type StepId } from "@/lib/setup";
 import { useStore } from "@/lib/store";
 
@@ -32,16 +33,17 @@ const steps: { id: StepId; title: string; help: string; icon: typeof Wallet }[] 
 
 export default function SetupPage() {
   const hydrated = useHydrated();
+  const ready = useSession((s) => s.ready) && hydrated;
   const router = useRouter();
   const [step, setStep] = useState<StepId>("money");
   const draft = useSetupDraft((s) => s.draft);
   // Setting up the shop replaces all its data — owner only.
   const isOwner = useStore((s) => s.staff.find((e) => e.id === s.currentEmployeeId)?.role === "admin");
   useEffect(() => {
-    if (hydrated && !isOwner) router.replace("/");
-  }, [hydrated, isOwner, router]);
+    if (ready && !isOwner) router.replace("/");
+  }, [ready, isOwner, router]);
 
-  if (!hydrated || !isOwner) return null;
+  if (!ready || !isOwner) return null;
 
   const issues = validate(draft);
   const idx = steps.findIndex((s) => s.id === step);

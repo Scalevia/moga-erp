@@ -7,6 +7,7 @@ import { useEffect } from "react";
 import { LogoIcon } from "@/components/logo";
 import { DemoNotice } from "@/components/setup-entry";
 import { cn, useHydrated } from "@/components/ui";
+import { signOut, useSession } from "@/lib/session";
 import { useStore } from "@/lib/store";
 
 const tabs = [
@@ -23,13 +24,13 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const pathname = usePathname();
   const router = useRouter();
   const hydrated = useHydrated();
-  const logout = useStore((s) => s.logout);
+  const ready = useSession((s) => s.ready) && hydrated;
   // Owner only: anyone else (or nobody signed in) goes back to the login page.
   const isOwner = useStore((s) => s.staff.find((e) => e.id === s.currentEmployeeId)?.role === "admin");
   useEffect(() => {
-    if (hydrated && !isOwner) router.replace("/");
-  }, [hydrated, isOwner, router]);
-  if (!hydrated || !isOwner) return null;
+    if (ready && !isOwner) router.replace("/");
+  }, [ready, isOwner, router]);
+  if (!ready || !isOwner) return null;
   return (
     <div className="mx-auto min-h-screen max-w-2xl pb-24">
       <header className="sticky top-0 z-20 flex items-center justify-between border-b border-border bg-bg/90 px-4 py-3 backdrop-blur">
@@ -45,8 +46,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             <Settings size={18} />
           </Link>
           <button
-            onClick={() => {
-              logout();
+            onClick={async () => {
+              await signOut();
               router.push("/");
             }}
             className="rounded-lg p-2 text-ink-2 hover:bg-surface-2"
