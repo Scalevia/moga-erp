@@ -18,10 +18,19 @@ export async function freshDb() {
     grant usage on schema auth to anon, authenticated;
     grant usage on schema public to anon, authenticated;
     create function public.rls_auto_enable() returns event_trigger language plpgsql as $$ begin end $$;
+    -- pg_net: requests are kept here instead of sent
+    create schema net;
+    create table net.sent (url text, body jsonb);
+    grant usage on schema net to public;
+    grant select on net.sent to public;
+    create function net.http_post(url text, body jsonb default '{}', params jsonb default '{}',
+      headers jsonb default '{}', timeout_milliseconds integer default 5000) returns bigint
+      language sql as $$ insert into net.sent values (url, body) returning 1::bigint $$;
   `);
   for (const f of readdirSync(MIGRATIONS).filter((x) => x.endsWith(".sql")).sort()) {
     try {
-      await db.exec(readFileSync(`${MIGRATIONS}/${f}`, "utf8"));
+      // pg_net isn't in the local Postgres: the stand-in above takes its place
+      await db.exec(readFileSync(`${MIGRATIONS}/${f}`, "utf8").replace("create extension if not exists pg_net;", ""));
     } catch (e) {
       throw new Error(`migration ${f}: ${e.message}${e.position ? ` (at ${e.position})` : ""}`);
     }

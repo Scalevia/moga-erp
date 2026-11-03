@@ -109,10 +109,19 @@ export async function signOut() {
 
 /**
  * The staff-accounts Edge Function (sign-in accounts need the project's secret key, which only it has).
- * Returns its answer, or its error message.
+ * Each call returns the function's answer, or its error message.
  */
-export async function staffAccounts(body: Record<string, unknown>): Promise<{ data?: unknown; error?: string }> {
-  const { data, error } = await getSupabase()!.functions.invoke("staff-accounts", { body });
+export function staffAccounts(body: Record<string, unknown>) {
+  return callFunction("staff-accounts", body);
+}
+
+/** The telegram-notify Edge Function: the owner's bot (status, linking their chat, a test message). */
+export function telegramBot(action: "status" | "link" | "test") {
+  return callFunction("telegram-notify", { action });
+}
+
+async function callFunction(name: string, body: Record<string, unknown>): Promise<{ data?: unknown; error?: string }> {
+  const { data, error } = await getSupabase()!.functions.invoke(name, { body });
   if (!error) return { data };
   try {
     const answer = await (error as { context?: Response }).context?.json();

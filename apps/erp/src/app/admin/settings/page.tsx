@@ -1,11 +1,13 @@
 "use client";
 
-import { CheckCircle2, Plus, Trash2 } from "lucide-react";
-import { useState } from "react";
+import { CheckCircle2, Plus, Send, Trash2 } from "lucide-react";
+import { useEffect, useState } from "react";
 import { Logo } from "@/components/logo";
-import { Button, Card, CardHeader, Field, Input, Textarea } from "@/components/ui";
+import { Button, Card, CardHeader, Field, Input, Textarea, cn } from "@/components/ui";
 import { machineIds, machineLabel } from "@/lib/format";
+import { telegramBot } from "@/lib/session";
 import { useStore } from "@/lib/store";
+import { isLive } from "@/lib/supabase";
 import type { MachineId } from "@/lib/types";
 
 export default function SettingsPage() {
@@ -165,6 +167,8 @@ export default function SettingsPage() {
         </div>
       </Card>
 
+      {isLive && <TelegramCard />}
+
       <div className="sticky bottom-20 z-10">
         <Button size="lg" className="w-full shadow-lg" disabled={!valid} onClick={save}>
           حفظ الإعدادات
@@ -176,5 +180,61 @@ export default function SettingsPage() {
         )}
       </div>
     </div>
+  );
+}
+
+/** The owner's Telegram bot: a message for every sale, and the day's figures when a shift closes. */
+function TelegramCard() {
+  const [state, setState] = useState<{ token: boolean; linked: boolean } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState<{ ok: boolean; text: string } | null>(null);
+
+  useEffect(() => {
+    telegramBot("status").then((r) => setState((r.data as { token: boolean; linked: boolean }) ?? { token: false, linked: false }));
+  }, []);
+
+  async function run(action: "link" | "test") {
+    setBusy(true);
+    setNote(null);
+    const r = await telegramBot(action);
+    setBusy(false);
+    if (r.error) return setNote({ ok: false, text: r.error });
+    if (action === "link") setState({ token: true, linked: true });
+    setNote({ ok: true, text: action === "link" ? "اتربط — بصّ على تليجرام" : "اتبعتت — بصّ على تليجرام" });
+  }
+
+  return (
+    <Card>
+      <CardHeader title="تليجرام" subtitle="إشعار بكل بيعة، وملخص اليوم مع تقفيل كل وردية — بيوصلك إنت بس" />
+      <div className="space-y-3 p-4 text-sm">
+        {!state ? (
+          <p className="text-ink-3">لحظة…</p>
+        ) : !state.token ? (
+          <ol className="list-inside list-decimal space-y-1 text-ink-2">
+            <li>في تليجرام افتح @BotFather وابعتله /newbot، وهيديك توكن.</li>
+            <li>حط التوكن في Supabase باسم TELEGRAM_BOT_TOKEN، وارجع هنا.</li>
+          </ol>
+        ) : state.linked ? (
+          <p className="flex items-center gap-1.5 text-good">
+            <CheckCircle2 size={16} /> البوت مربوط
+          </p>
+        ) : (
+          <p className="text-ink-2">ابعت أي رسالة للبوت من تليجرام، وبعدين دوس «ربط البوت».</p>
+        )}
+        {state?.token && (
+          <div className="flex flex-wrap gap-2">
+            <Button size="sm" variant={state.linked ? "secondary" : "primary"} disabled={busy} onClick={() => run("link")}>
+              {state.linked ? "ربط تاني" : "ربط البوت"}
+            </Button>
+            {state.linked && (
+              <Button size="sm" variant="secondary" disabled={busy} onClick={() => run("test")}>
+                <Send size={14} /> رسالة تجربة
+              </Button>
+            )}
+          </div>
+        )}
+        {note && <p className={cn("rounded-lg px-3 py-2", note.ok ? "bg-good-soft text-good" : "bg-bad-soft text-bad")}>{note.text}</p>}
+      </div>
+    </Card>
   );
 }
