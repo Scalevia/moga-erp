@@ -88,6 +88,22 @@ ok("…the drawer against what was expected (5,000 + 100 + 1,000 − 150 − 100
   day.text.includes("الدرج: المفروض 5,850 — اتعدّ 5,900 — زيادة 50"));
 ok("…and the wallet counted 20 short", day.text.includes("فودافون كاش: عجز 20"));
 
+// ---------------------------------------------------------------- the next shift opens
+await as(U.emp);
+await rpc("record_agent_load", { p_machine_id: "fawry", p_balance_id: "fawry_airtime", p_amount: 1000 });
+const before = (await sent()).length;
+await rpc("open_shift", { p_float: 5880, p_count: { wallet: 1610, machines: { ...count.machines, fawry_airtime: 1510 } } });
+out = await sent();
+const opened = (await one(`select id from public.shifts where closed_at is null`)).id;
+ok("opening a shift asks to send it", out.length === before + 1 && out.at(-1).event === "shift_opened" && out.at(-1).id === opened);
+await asService();
+const open = await rpc("telegram_message", { p_event: "shift_opened", p_id: opened });
+console.log(open.text, "\n");
+ok("the opening's message: who and when, the drawer against the last close (5,900 → 5,880: 20 short)",
+  open.text.includes("🟢 محمد سامي فتح الوردية") && open.text.includes("الدرج: المفروض 5,900 — اتعدّ 5,880 — عجز 20"));
+ok("…the wallet 20 short, and this morning's agent load", open.text.includes("فودافون كاش: عجز 20") && open.text.includes("المندوب شحن قبل الفتح: فوري — شحن (Air time) 1,000"));
+ok("the setup's shift (saved closed) sent nothing", !(await sent()).some((b) => b.event === "shift_opened" && b.id !== opened));
+
 const { pass, fail } = results();
 console.log(`\n${pass} pass, ${fail} fail`);
 process.exit(fail ? 1 : 0);

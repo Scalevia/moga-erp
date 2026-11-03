@@ -2,7 +2,8 @@
 //
 // The bot's token is an Edge Function secret (TELEGRAM_BOT_TOKEN), set by the owner in Supabase. Two kinds
 // of call come here:
-//   {event: "sale" | "shift_closed", id}  from the database, after an invoice or a shift closing is saved.
+//   {event: "sale" | "shift_opened" | "shift_closed", id}  from the database, after an invoice is saved
+//       or a shift opens or closes.
 //       The text comes back from the database (written from the saved records), and each goes out once,
 //       so a call made up by anyone else can only repeat nothing.
 //   {action: "status" | "link" | "test"}   from the owner's settings page (signed in as the owner).
@@ -52,7 +53,7 @@ Deno.serve(async (req) => {
     return fail("طلب غلط");
   }
   try {
-    if (body.event === "sale" || body.event === "shift_closed") return await notify(String(body.event), String(body.id));
+    if (body.event === "sale" || body.event === "shift_opened" || body.event === "shift_closed") return await notify(String(body.event), String(body.id));
     if (!(await isOwner(req))) return fail("دي للمالك بس", 403);
     if (body.action === "status") return await status();
     if (!token) return fail("حط توكن البوت في Supabase الأول (TELEGRAM_BOT_TOKEN)");
@@ -103,7 +104,7 @@ async function link() {
   if (error) return fail(error.message);
   await telegram("sendMessage", {
     chat_id: chat.id,
-    text: "✅ البوت اتربط بـ MOGA — هيوصلك هنا إشعار بكل بيعة، وملخص اليوم مع تقفيل كل وردية.",
+    text: "✅ البوت اتربط بـ MOGA — هيوصلك هنا إشعار بكل بيعة، ومع فتح وتقفيل كل وردية.",
   });
   return reply({ ok: true });
 }

@@ -183,7 +183,7 @@ export default function SettingsPage() {
   );
 }
 
-/** The owner's Telegram bot: a message for every sale, and the day's figures when a shift closes. */
+/** The owner's Telegram bot: a message for every sale, and when a shift opens and closes. */
 function TelegramCard() {
   const [state, setState] = useState<{ token: boolean; linked: boolean } | null>(null);
   const [busy, setBusy] = useState(false);
@@ -205,7 +205,7 @@ function TelegramCard() {
 
   return (
     <Card>
-      <CardHeader title="تليجرام" subtitle="إشعار بكل بيعة، وملخص اليوم مع تقفيل كل وردية — بيوصلك إنت بس" />
+      <CardHeader title="تليجرام" subtitle="إشعار بكل بيعة، ومع فتح وتقفيل كل وردية — بيوصلك إنت بس" />
       <div className="space-y-3 p-4 text-sm">
         {!state ? (
           <p className="text-ink-3">لحظة…</p>
